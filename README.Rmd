@@ -103,7 +103,7 @@ garch1 <- ugarchspec(variance.model = list(model = c("sGARCH",
     1), external.regressors = NULL), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
     distribution.model = c("norm", "snorm", "std", "sstd", "ged","sged", "nig", "ghyp", "jsu")[1])
 
-garchfit1 = ugarchfit(spec = garch11, data = fit)
+garchfit1 = ugarchfit(spec = garch1, data = fit)
 
 garchfit1
 
