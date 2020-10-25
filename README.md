@@ -18,7 +18,7 @@ library(tidyverse)
 
     ## ✓ ggplot2 3.3.2     ✓ purrr   0.3.4
     ## ✓ tibble  3.0.4     ✓ dplyr   1.0.2
-    ## ✓ tidyr   1.0.2     ✓ stringr 1.4.0
+    ## ✓ tidyr   1.1.2     ✓ stringr 1.4.0
     ## ✓ readr   1.3.1     ✓ forcats 0.4.0
 
     ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
@@ -142,27 +142,242 @@ library(rugarch)
 # combining the two datasets to make sure that they line up 
 
 comb <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>%  left_join(xts_tbl(TP40), by="date") %>%
-  tbl_xts()
+  tbl_xts() 
 
-exreg <- comb[,1]
+comb[is.na(comb)] <- 0 
+
+colSums(is.na(comb))
+```
+
+    ## ID_Dispersion_W_J400            SimpleRet 
+    ##                    0                    0
+
+``` r
 fit <- comb[,2]
 
-garch11 <- ugarchspec(variance.model = list(model = c("sGARCH", 
+# first fit the simple model to returns 
+
+garch1 <- ugarchspec(variance.model = list(model = c("sGARCH", 
+    "gjrGARCH", "eGARCH", "fGARCH", "apARCH")[1], garchOrder = c(1, 
+    1), external.regressors = NULL), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution.model = c("norm", "snorm", "std", "sstd", "ged","sged", "nig", "ghyp", "jsu")[1])
+
+garchfit1 = ugarchfit(spec = garch1, data = fit)
+
+garchfit1
+```
+
+    ## 
+    ## *---------------------------------*
+    ## *          GARCH Model Fit        *
+    ## *---------------------------------*
+    ## 
+    ## Conditional Variance Dynamics    
+    ## -----------------------------------
+    ## GARCH Model  : sGARCH(1,1)
+    ## Mean Model   : ARFIMA(1,0,0)
+    ## Distribution : norm 
+    ## 
+    ## Optimal Parameters
+    ## ------------------------------------
+    ##         Estimate  Std. Error  t value Pr(>|t|)
+    ## mu      0.000586    0.000286  2.04811  0.04055
+    ## ar1    -0.021374    0.034106 -0.62668  0.53087
+    ## omega   0.000003    0.000002  1.38362  0.16648
+    ## alpha1  0.101767    0.019006  5.35452  0.00000
+    ## beta1   0.874803    0.022178 39.44383  0.00000
+    ## 
+    ## Robust Standard Errors:
+    ##         Estimate  Std. Error  t value Pr(>|t|)
+    ## mu      0.000586    0.000281  2.08339 0.037215
+    ## ar1    -0.021374    0.033717 -0.63391 0.526138
+    ## omega   0.000003    0.000008  0.37439 0.708113
+    ## alpha1  0.101767    0.033155  3.06940 0.002145
+    ## beta1   0.874803    0.056884 15.37865 0.000000
+    ## 
+    ## LogLikelihood : 3161.353 
+    ## 
+    ## Information Criteria
+    ## ------------------------------------
+    ##                     
+    ## Akaike       -6.3190
+    ## Bayes        -6.2945
+    ## Shibata      -6.3191
+    ## Hannan-Quinn -6.3097
+    ## 
+    ## Weighted Ljung-Box Test on Standardized Residuals
+    ## ------------------------------------
+    ##                         statistic p-value
+    ## Lag[1]                     0.1690  0.6810
+    ## Lag[2*(p+q)+(p+q)-1][2]    0.1797  0.9992
+    ## Lag[4*(p+q)+(p+q)-1][5]    2.8086  0.4810
+    ## d.o.f=1
+    ## H0 : No serial correlation
+    ## 
+    ## Weighted Ljung-Box Test on Standardized Squared Residuals
+    ## ------------------------------------
+    ##                         statistic p-value
+    ## Lag[1]                      1.034 0.30918
+    ## Lag[2*(p+q)+(p+q)-1][5]     6.845 0.05653
+    ## Lag[4*(p+q)+(p+q)-1][9]    10.842 0.03294
+    ## d.o.f=2
+    ## 
+    ## Weighted ARCH LM Tests
+    ## ------------------------------------
+    ##             Statistic Shape Scale  P-Value
+    ## ARCH Lag[3]     1.832 0.500 2.000 0.175833
+    ## ARCH Lag[5]    10.888 1.440 1.667 0.003986
+    ## ARCH Lag[7]    11.957 2.315 1.543 0.006355
+    ## 
+    ## Nyblom stability test
+    ## ------------------------------------
+    ## Joint Statistic:  8.1748
+    ## Individual Statistics:              
+    ## mu     0.04486
+    ## ar1    0.05302
+    ## omega  1.71482
+    ## alpha1 0.29833
+    ## beta1  0.24180
+    ## 
+    ## Asymptotic Critical Values (10% 5% 1%)
+    ## Joint Statistic:          1.28 1.47 1.88
+    ## Individual Statistic:     0.35 0.47 0.75
+    ## 
+    ## Sign Bias Test
+    ## ------------------------------------
+    ##                    t-value   prob sig
+    ## Sign Bias          0.69674 0.4861    
+    ## Negative Sign Bias 0.01763 0.9859    
+    ## Positive Sign Bias 1.37531 0.1693    
+    ## Joint Effect       5.45206 0.1415    
+    ## 
+    ## 
+    ## Adjusted Pearson Goodness-of-Fit Test:
+    ## ------------------------------------
+    ##   group statistic p-value(g-1)
+    ## 1    20     19.16       0.4467
+    ## 2    30     34.36       0.2262
+    ## 3    40     42.64       0.3173
+    ## 4    50     43.49       0.6952
+    ## 
+    ## 
+    ## Elapsed time : 0.2213342
+
+``` r
+# identifying the fit and external regressor for the model then fitting it to GARCH-X
+
+exreg <- comb[,1]
+
+garchx <- ugarchspec(variance.model = list(model = c("sGARCH", 
     "gjrGARCH", "eGARCH", "fGARCH", "apARCH")[1], garchOrder = c(1, 
     1), external.regressors = exreg), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
     distribution.model = c("norm", "snorm", "std", "sstd", "ged","sged", "nig", "ghyp", "jsu")[1])
 
 # Now to fit the garch to the returns
 
-#garchfit1 = ugarchfit(spec = garch11, data = fit)
+garchfitx = ugarchfit(spec = garchx, data = fit)
 
-#Error: $ operator is invalid for atomic vectors
-#In addition: Warning message:
-#In .makefitmodel(garchmodel = "sGARCH", f = .sgarchLLH, T = T, m = m,  : 
-#rugarch-->warning: failed to invert hessian
-
-#garchfit1
+garchfitx
 ```
+
+    ## 
+    ## *---------------------------------*
+    ## *          GARCH Model Fit        *
+    ## *---------------------------------*
+    ## 
+    ## Conditional Variance Dynamics    
+    ## -----------------------------------
+    ## GARCH Model  : sGARCH(1,1)
+    ## Mean Model   : ARFIMA(1,0,0)
+    ## Distribution : norm 
+    ## 
+    ## Optimal Parameters
+    ## ------------------------------------
+    ##         Estimate  Std. Error  t value Pr(>|t|)
+    ## mu     -0.000381    0.000355 -1.07457 0.282567
+    ## ar1    -0.018045    0.035910 -0.50252 0.615302
+    ## omega   0.000000    0.000003  0.00000 1.000000
+    ## alpha1  0.119649    0.040245  2.97305 0.002949
+    ## beta1   0.327516    0.132646  2.46911 0.013545
+    ## vxreg1  0.002659    0.000750  3.54783 0.000388
+    ## 
+    ## Robust Standard Errors:
+    ##         Estimate  Std. Error  t value Pr(>|t|)
+    ## mu     -0.000381    0.001491 -0.25568  0.79820
+    ## ar1    -0.018045    0.052175 -0.34586  0.72945
+    ## omega   0.000000    0.000007  0.00000  1.00000
+    ## alpha1  0.119649    0.227176  0.52668  0.59842
+    ## beta1   0.327516    0.913558  0.35851  0.71996
+    ## vxreg1  0.002659    0.005160  0.51537  0.60629
+    ## 
+    ## LogLikelihood : 3180.455 
+    ## 
+    ## Information Criteria
+    ## ------------------------------------
+    ##                     
+    ## Akaike       -6.3553
+    ## Bayes        -6.3258
+    ## Shibata      -6.3553
+    ## Hannan-Quinn -6.3441
+    ## 
+    ## Weighted Ljung-Box Test on Standardized Residuals
+    ## ------------------------------------
+    ##                         statistic p-value
+    ## Lag[1]                     0.1976  0.6567
+    ## Lag[2*(p+q)+(p+q)-1][2]    0.2091  0.9986
+    ## Lag[4*(p+q)+(p+q)-1][5]    4.2838  0.1838
+    ## d.o.f=1
+    ## H0 : No serial correlation
+    ## 
+    ## Weighted Ljung-Box Test on Standardized Squared Residuals
+    ## ------------------------------------
+    ##                         statistic   p-value
+    ## Lag[1]                       1.47 2.253e-01
+    ## Lag[2*(p+q)+(p+q)-1][5]     30.73 1.971e-08
+    ## Lag[4*(p+q)+(p+q)-1][9]     48.84 2.220e-12
+    ## d.o.f=2
+    ## 
+    ## Weighted ARCH LM Tests
+    ## ------------------------------------
+    ##             Statistic Shape Scale   P-Value
+    ## ARCH Lag[3]     23.33 0.500 2.000 1.365e-06
+    ## ARCH Lag[5]     40.85 1.440 1.667 1.062e-10
+    ## ARCH Lag[7]     47.74 2.315 1.543 2.941e-12
+    ## 
+    ## Nyblom stability test
+    ## ------------------------------------
+    ## Joint Statistic:  47.6351
+    ## Individual Statistics:               
+    ## mu      0.08197
+    ## ar1     0.04436
+    ## omega  11.03431
+    ## alpha1  1.10188
+    ## beta1   1.08068
+    ## vxreg1  1.29789
+    ## 
+    ## Asymptotic Critical Values (10% 5% 1%)
+    ## Joint Statistic:          1.49 1.68 2.12
+    ## Individual Statistic:     0.35 0.47 0.75
+    ## 
+    ## Sign Bias Test
+    ## ------------------------------------
+    ##                    t-value    prob sig
+    ## Sign Bias          1.85456 0.06396   *
+    ## Negative Sign Bias 0.04475 0.96432    
+    ## Positive Sign Bias 0.09030 0.92806    
+    ## Joint Effect       6.20856 0.10189    
+    ## 
+    ## 
+    ## Adjusted Pearson Goodness-of-Fit Test:
+    ## ------------------------------------
+    ##   group statistic p-value(g-1)
+    ## 1    20     31.05      0.03987
+    ## 2    30     40.43      0.07716
+    ## 3    40     51.53      0.08629
+    ## 4    50     60.31      0.12904
+    ## 
+    ## 
+    ## Elapsed time : 0.367398
 
 # Created:
 

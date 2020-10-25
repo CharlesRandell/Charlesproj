@@ -96,6 +96,8 @@ comb[is.na(comb)] <- 0
 
 colSums(is.na(comb))
 
+fit <- comb[,2]
+
 # first fit the simple model to returns 
 
 garch1 <- ugarchspec(variance.model = list(model = c("sGARCH", 
@@ -110,7 +112,6 @@ garchfit1
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
 
 exreg <- comb[,1]
-fit <- comb[,2]
 
 garchx <- ugarchspec(variance.model = list(model = c("sGARCH", 
     "gjrGARCH", "eGARCH", "fGARCH", "apARCH")[1], garchOrder = c(1, 
@@ -119,9 +120,9 @@ garchx <- ugarchspec(variance.model = list(model = c("sGARCH",
 
 # Now to fit the garch to the returns
 
-garchfitx = ugarchfit(spec = garch11, data = fit)
+garchfitx = ugarchfit(spec = garchx, data = fit)
 
-garchfit1
+garchfitx
 
 
 ```
