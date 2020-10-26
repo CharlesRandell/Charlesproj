@@ -323,7 +323,7 @@ garchfit1
     ## 4    50     57.01      0.20186
     ## 
     ## 
-    ## Elapsed time : 0.371305
+    ## Elapsed time : 0.4357319
 
 ``` r
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
@@ -439,7 +439,7 @@ garchfitx
     ## 4    50     82.23     0.002063
     ## 
     ## 
-    ## Elapsed time : 0.4280658
+    ## Elapsed time : 0.3913319
 
 ## Veiw the two conditional variance plots
 
@@ -482,14 +482,20 @@ labs(title = "Comparison: Returns Sigma vs Sigma from Garch",
 ![](README_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->
 
 ``` r
-plot(garchfitx, which = 3)
+plot(garchfitx, which = 'all')
 ```
+
+    ## 
+    ## please wait...calculating quantiles...
 
 ![](README_files/figure-gfm/unnamed-chunk-9-3.png)<!-- -->
 
 ``` r
-plot(garchfit1, which = 3)
+plot(garchfit1, which = 'all')
 ```
+
+    ## 
+    ## please wait...calculating quantiles...
 
 ![](README_files/figure-gfm/unnamed-chunk-9-4.png)<!-- -->
 
@@ -587,7 +593,7 @@ show(roll)
     ## 2020-07-30 4e-04 0.0092    0     0          0  -0.0175
     ## 2020-07-31 5e-04 0.0107    0     0          0  -0.0050
     ## 
-    ## Elapsed: 16.94278 secs
+    ## Elapsed: 14.8209 secs
 
 ``` r
 report(roll, type = "fpm")
@@ -645,7 +651,7 @@ show(rollx)
     ## 2020-07-30 -6e-04 0.0096    0     0          0  -0.0175
     ## 2020-07-31 -4e-04 0.0114    0     0          0  -0.0050
     ## 
-    ## Elapsed: 3.010165 secs
+    ## Elapsed: 2.715621 secs
 
 ``` r
 report(rollx, type = "fpm")

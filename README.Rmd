@@ -190,9 +190,9 @@ labs(title = "Comparison: Returns Sigma vs Sigma from Garch",
 
 
 
-plot(garchfitx, which = 3)
+plot(garchfitx, which = 'all')
 
-plot(garchfit1, which = 3)
+plot(garchfit1, which = 'all')
 
 
 # testing the fit 
