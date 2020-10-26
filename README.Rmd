@@ -39,21 +39,6 @@ W_Dispersion <-
 M_Dispersion <- 
   read_rds("data/Dispersion/Monthly.rds")
 
-# Correlations will be similar (as constituents are quite similar)
-M_Dispersion %>% filter(Freq == "1_Month") %>% 
-  ggplot() + geom_line(aes(date, Avg_Corr, color = Idx))
-
-M_Dispersion %>% filter(Freq == "1_Month") %>% 
-  ggplot() + geom_line(aes(date, Dispersion_W, color = Idx))
-
-M_Dispersion %>% filter(Freq == "1_Month") %>% 
-  ggplot() + geom_line(aes(date, Dispersion_U, color = Idx))
-
-M_Dispersion %>% filter(Freq == "3_Month") %>% 
-  ggplot() + geom_line(aes(date, Dispersion_W, color = Idx))
-
-W_Dispersion %>% 
-  ggplot() + geom_line(aes(date, W_SD, color = Idx))
 ```
 
 
@@ -64,15 +49,17 @@ library(tbl2xts)
 
 # the JSE top 40 index used to create a simple return index
 
-TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "TOP40TR Index") %>% 
+view(fmxdat::SA_Indexes)
+
+TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHR40TR Index") %>% 
     mutate(SimpleRet = Price / lag(Price)-1) %>% 
     ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
 
 Plotdata <- cbind(TP40, TP40^2, abs(TP40))
 colnames(Plotdata) <- c("Returns", "Returns_Sqd", "Returns_Abs")
 
-Plotdata <- Plotdata %>% xts_tbl() %>% gather(ReturnType, Returns, 
-    -date)
+Plotdata <- Plotdata %>% xts_tbl() %>% gather(ReturnType, Returns,-date) %>%
+  filter(date >= as.Date("2016-07-29") & date <= as.Date("2020-07-31"))
 
 ggplot(Plotdata) + geom_line(aes(x = date, y = Returns, colour = ReturnType, 
     alpha = 0.5)) + ggtitle("Return Type Persistence: TOP40TR Index") + 
@@ -92,11 +79,21 @@ library(rugarch)
 comb <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>%  left_join(xts_tbl(TP40), by="date") %>%
   tbl_xts() 
 
+# plot dispersion against returns
+
+comb %>% xts_tbl() %>% 
+  ggplot() + 
+  geom_line(aes(date, ID_Dispersion_W_J400), color = "steel blue") + 
+  geom_line(aes(date, SimpleRet), color = "red")
+
+# remove the NAs - temporary solution 
+
 comb[is.na(comb)] <- 0 
 
 colSums(is.na(comb))
 
 fit <- comb[,2]
+
 
 # first fit the simple model to returns 
 
@@ -107,7 +104,7 @@ garch1 <- ugarchspec(variance.model = list(model = c("sGARCH",
 
 garchfit1 = ugarchfit(spec = garch1, data = fit)
 
-garchfit1
+print(garchfit1)
 
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
 
@@ -123,68 +120,89 @@ garchx <- ugarchspec(variance.model = list(model = c("sGARCH",
 garchfitx = ugarchfit(spec = garchx, data = fit)
 
 garchfitx
-
-
 ```
 
 
-
-# Created:
+## Veiw the two conditional variance plots
 
 ```{r}
-# library(RA)
-# load_core()
-# Root <- setroot()
-# EQSScreen <- "Tickers"
-# UniverseSelect <- "JALSHAll"
-# currency <- c("Local", "USD")[1]
-# Price_Field = c("TOT_RETURN_INDEX_GROSS_DVDS", "PX_LAST")[1]
-# 
-# NonTradeDays <- RA::NonTradeDays(Root)
-# IntraDays <-
-#   datload(Root, "FullIDay", Intraday_Data) %>%
-#   filter(!date %in% NonTradeDays) %>% mutate(Tickers = gsub(" SJ Equity", "", Tickers))
-# 
-# wts <-
-#   datload(Root, SaveName = "EQS_Return_Daily", Db_Factors_Merge, UQ(EQSScreen), UQ(UniverseSelect), UQ(currency), UQ(Price_Field), EQS_Return_Daily)
-# 
-# ID_Disp <- IntraDays %>% select(date, contains("_Dispersion"), contains("_PXMove") ) %>% unique
-# 
-# IVol_J200 <-
-#   left_join(IntraDays,
-#             wts %>% mutate(Tickers = gsub(" SJ Equity", "", Tickers)) %>% select(date, Tickers, wt = J200_W_Adj) %>% filter(!is.na(wt)),
-#             by = c("date", "Tickers")) %>%
-#   select(date, Tickers, RV, J200 = wt) %>% filter(!is.na(J200)) %>%
-#   group_by(date) %>% mutate(J200 = J200 / sum(J200)) %>% summarise(Avg_RV = mean(RV), W_Avg_RV_J200 = sum(J200 * RV) ) %>% ungroup() %>% unique
-# 
-# datstore(Root, SaveName = "J200_IVol", dataframe = IVol_J200,
-#          Research, FMX_Projects_2020, Charles, data)
-# 
-# IVol_J400 <-
-#   left_join(IntraDays,
-#             wts %>% mutate(Tickers = gsub(" SJ Equity", "", Tickers)) %>% select(date, Tickers, wt = J400_W_Adj) %>% filter(!is.na(wt)),
-#             by = c("date", "Tickers")) %>%
-#   select(date, Tickers, RV, J400 = wt) %>% filter(!is.na(J400)) %>%
-#     group_by(date) %>% mutate(J400 = J400 / sum(J400)) %>% summarise(Avg_RV = mean(RV), W_Avg_RV_J400 = sum(J400 * RV)) %>% ungroup() %>% unique
-# 
-# datstore(Root, SaveName = "J400_IVol", dataframe = IVol_J400,
-#          Research, FMX_Projects_2020, Charles, data)
-# 
-# datstore(Root, SaveName = "ID_Disp", dataframe = ID_Disp,
-#          Research, FMX_Projects_2020, Charles, data)
-# 
-# bind_rows(
-#   "D:/Work/RAnalytics/Data/Dispersion/Monthly/1" %>% list.files(., full.names = T, recursive = T) %>%
-#   as.list() %>% map_df(~read_rds(.)) %>% select(date, Dispersion_U, Dispersion_W, Avg_Corr, W_SD, Avg_SD, Idx) %>% unique %>% mutate(Freq = "1_Month"),
-#   "D:/Work/RAnalytics/Data/Dispersion/Monthly/3" %>% list.files(., full.names = T, recursive = T) %>%
-#   as.list() %>% map_df(~read_rds(.)) %>% select(date, Dispersion_U, Dispersion_W, Avg_Corr, W_SD, Idx) %>% unique %>% mutate(Freq = "3_Month")
-# ) %>%
-#   write_rds("data/Dispersion/Monthly.rds")
-# 
-#  "D:/Work/RAnalytics/Data/Dispersion/Weekly/1" %>% list.files(., full.names = T, recursive = T) %>%
-#  map_df(~read_rds(.)) %>% select(date, Dispersion_U, Dispersion_W, Avg_Corr, W_SD, Idx) %>% unique %>% mutate(Freq = "Weekly") %>% 
-#  write_rds("data/Dispersion/Weekly.rds")
 
+
+# First for the garch-x
+sigmax <- sigma(garchfitx) %>% xts_tbl()
+colnames(sigmax) <- c("date", "sigma")
+sigmax <- sigmax %>% mutate(date = as.Date(date))
+
+
+ggplot() + geom_line(data = Plotdata %>% filter(ReturnType == 
+    "Returns_Sqd") %>% select(date, Returns) %>% unique %>% mutate(Returns = sqrt(Returns)), 
+    aes(x = date, y = Returns)) + geom_line(data = sigmax, aes(x = date, 
+    y = sigma), color = "red", size = 2, alpha = 0.8) + theme_bw() + 
+    # scale_y_continuous(limits = c(0, 0.35)) +
+labs(title = "Comparison: Returns Sigma vs Sigma from Garch", 
+    subtitle = "Note the smoothing effect of garch, as noise is controlled for.", 
+    x = "", y = "Comparison of estimated volatility")
+
+
+# now for the garch
+
+sigma <- sigma(garchfit1) %>% xts_tbl()
+colnames(sigma) <- c("date", "sigma")
+sigma <- sigma %>% mutate(date = as.Date(date))
+
+ggplot() + geom_line(data = Plotdata %>% filter(ReturnType == 
+    "Returns_Sqd") %>% select(date, Returns) %>% unique %>% mutate(Returns = sqrt(Returns)), 
+    aes(x = date, y = Returns)) + geom_line(data = sigma, aes(x = date, 
+    y = sigma), color = "red", size = 2, alpha = 0.8) + theme_bw() + 
+    # scale_y_continuous(limits = c(0, 0.35)) +
+labs(title = "Comparison: Returns Sigma vs Sigma from Garch", 
+    subtitle = "Note the smoothing effect of garch, as noise is controlled for.", 
+    x = "", y = "Comparison of estimated volatility")
+
+
+plot(garchfitx, which = 3)
+
+plot(garchfit1, which = 3)
+
+
+# testing the fit 
+
+infocriteria(garchfit1)
+
+infocriteria(garchfitx)
 
 ```
+
+## forecast vol with the two models 
+
+```{r}
+garchfx <- ugarchforecast(garchfitx, n.ahead = 30)
+garchf <- ugarchforecast(garchfit1, n.ahead = 5)
+
+plot(garchfx, which = 1)
+plot(garchf, which = 1)
+
+
+
+# rolling forecast
+
+cl <- makePSOCKcluster(10)
+spec <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = NULL), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution = "norm")
+# Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
+# normal distribution
+
+roll <- ugarchroll(spec, fit, forecast.length = 500, refit.every = 50, 
+    refit.window = "moving", window.size = 1000, calculate.VaR = TRUE, 
+    VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
+
+# For this, only 1-step ahead can be done automatically.
+show(roll)
+
+
+report(roll, type = "fpm")
+
+```
+
 

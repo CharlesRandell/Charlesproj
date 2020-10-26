@@ -56,41 +56,7 @@ W_Dispersion <-
   read_rds("data/Dispersion/Weekly.rds")
 M_Dispersion <- 
   read_rds("data/Dispersion/Monthly.rds")
-
-# Correlations will be similar (as constituents are quite similar)
-M_Dispersion %>% filter(Freq == "1_Month") %>% 
-  ggplot() + geom_line(aes(date, Avg_Corr, color = Idx))
 ```
-
-![](README_files/figure-gfm/unnamed-chunk-1-3.png)<!-- -->
-
-``` r
-M_Dispersion %>% filter(Freq == "1_Month") %>% 
-  ggplot() + geom_line(aes(date, Dispersion_W, color = Idx))
-```
-
-![](README_files/figure-gfm/unnamed-chunk-1-4.png)<!-- -->
-
-``` r
-M_Dispersion %>% filter(Freq == "1_Month") %>% 
-  ggplot() + geom_line(aes(date, Dispersion_U, color = Idx))
-```
-
-![](README_files/figure-gfm/unnamed-chunk-1-5.png)<!-- -->
-
-``` r
-M_Dispersion %>% filter(Freq == "3_Month") %>% 
-  ggplot() + geom_line(aes(date, Dispersion_W, color = Idx))
-```
-
-![](README_files/figure-gfm/unnamed-chunk-1-6.png)<!-- -->
-
-``` r
-W_Dispersion %>% 
-  ggplot() + geom_line(aes(date, W_SD, color = Idx))
-```
-
-![](README_files/figure-gfm/unnamed-chunk-1-7.png)<!-- -->
 
 ## Importing index returns data
 
@@ -99,23 +65,23 @@ library(tbl2xts)
 
 # the JSE top 40 index used to create a simple return index
 
-TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "TOP40TR Index") %>% 
+view(fmxdat::SA_Indexes)
+
+TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHR40TR Index") %>% 
     mutate(SimpleRet = Price / lag(Price)-1) %>% 
     ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
 
 Plotdata <- cbind(TP40, TP40^2, abs(TP40))
 colnames(Plotdata) <- c("Returns", "Returns_Sqd", "Returns_Abs")
 
-Plotdata <- Plotdata %>% xts_tbl() %>% gather(ReturnType, Returns, 
-    -date)
+Plotdata <- Plotdata %>% xts_tbl() %>% gather(ReturnType, Returns,-date) %>%
+  filter(date >= as.Date("2016-07-29") & date <= as.Date("2020-07-31"))
 
 ggplot(Plotdata) + geom_line(aes(x = date, y = Returns, colour = ReturnType, 
     alpha = 0.5)) + ggtitle("Return Type Persistence: TOP40TR Index") + 
     facet_wrap(~ReturnType, nrow = 3, ncol = 1, scales = "free") + 
     guides(alpha = FALSE, colour = FALSE) + theme_bw()
 ```
-
-    ## Warning: Removed 3 row(s) containing missing values (geom_path).
 
 ![](README_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
 
@@ -144,6 +110,19 @@ library(rugarch)
 comb <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>%  left_join(xts_tbl(TP40), by="date") %>%
   tbl_xts() 
 
+# plot dispersion against returns
+
+comb %>% xts_tbl() %>% 
+  ggplot() + 
+  geom_line(aes(date, ID_Dispersion_W_J400), color = "steel blue") + 
+  geom_line(aes(date, SimpleRet), color = "red")
+```
+
+![](README_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+
+``` r
+# remove the NAs - temporary solution 
+
 comb[is.na(comb)] <- 0 
 
 colSums(is.na(comb))
@@ -155,6 +134,7 @@ colSums(is.na(comb))
 ``` r
 fit <- comb[,2]
 
+
 # first fit the simple model to returns 
 
 garch1 <- ugarchspec(variance.model = list(model = c("sGARCH", 
@@ -164,7 +144,7 @@ garch1 <- ugarchspec(variance.model = list(model = c("sGARCH",
 
 garchfit1 = ugarchfit(spec = garch1, data = fit)
 
-garchfit1
+print(garchfit1)
 ```
 
     ## 
@@ -181,63 +161,63 @@ garchfit1
     ## Optimal Parameters
     ## ------------------------------------
     ##         Estimate  Std. Error  t value Pr(>|t|)
-    ## mu      0.000586    0.000286  2.04811  0.04055
-    ## ar1    -0.021374    0.034106 -0.62668  0.53087
-    ## omega   0.000003    0.000002  1.38362  0.16648
-    ## alpha1  0.101767    0.019006  5.35452  0.00000
-    ## beta1   0.874803    0.022178 39.44383  0.00000
+    ## mu      0.000535    0.000303  1.76425 0.077689
+    ## ar1    -0.026491    0.034052 -0.77796 0.436595
+    ## omega   0.000004    0.000003  1.18613 0.235572
+    ## alpha1  0.110732    0.020194  5.48334 0.000000
+    ## beta1   0.865822    0.026487 32.68904 0.000000
     ## 
     ## Robust Standard Errors:
     ##         Estimate  Std. Error  t value Pr(>|t|)
-    ## mu      0.000586    0.000281  2.08339 0.037215
-    ## ar1    -0.021374    0.033717 -0.63391 0.526138
-    ## omega   0.000003    0.000008  0.37439 0.708113
-    ## alpha1  0.101767    0.033155  3.06940 0.002145
-    ## beta1   0.874803    0.056884 15.37865 0.000000
+    ## mu      0.000535    0.000300  1.78385 0.074448
+    ## ar1    -0.026491    0.032872 -0.80588 0.420310
+    ## omega   0.000004    0.000012  0.30501 0.760362
+    ## alpha1  0.110732    0.029263  3.78397 0.000154
+    ## beta1   0.865822    0.074988 11.54618 0.000000
     ## 
-    ## LogLikelihood : 3161.353 
+    ## LogLikelihood : 3090.233 
     ## 
     ## Information Criteria
     ## ------------------------------------
     ##                     
-    ## Akaike       -6.3190
-    ## Bayes        -6.2945
-    ## Shibata      -6.3191
-    ## Hannan-Quinn -6.3097
+    ## Akaike       -6.1766
+    ## Bayes        -6.1521
+    ## Shibata      -6.1767
+    ## Hannan-Quinn -6.1673
     ## 
     ## Weighted Ljung-Box Test on Standardized Residuals
     ## ------------------------------------
     ##                         statistic p-value
-    ## Lag[1]                     0.1690  0.6810
-    ## Lag[2*(p+q)+(p+q)-1][2]    0.1797  0.9992
-    ## Lag[4*(p+q)+(p+q)-1][5]    2.8086  0.4810
+    ## Lag[1]                     0.2543  0.6141
+    ## Lag[2*(p+q)+(p+q)-1][2]    0.4203  0.9803
+    ## Lag[4*(p+q)+(p+q)-1][5]    1.8024  0.7673
     ## d.o.f=1
     ## H0 : No serial correlation
     ## 
     ## Weighted Ljung-Box Test on Standardized Squared Residuals
     ## ------------------------------------
     ##                         statistic p-value
-    ## Lag[1]                      1.034 0.30918
-    ## Lag[2*(p+q)+(p+q)-1][5]     6.845 0.05653
-    ## Lag[4*(p+q)+(p+q)-1][9]    10.842 0.03294
+    ## Lag[1]                     0.3338 0.56344
+    ## Lag[2*(p+q)+(p+q)-1][5]    4.6094 0.18723
+    ## Lag[4*(p+q)+(p+q)-1][9]    8.5746 0.09918
     ## d.o.f=2
     ## 
     ## Weighted ARCH LM Tests
     ## ------------------------------------
-    ##             Statistic Shape Scale  P-Value
-    ## ARCH Lag[3]     1.832 0.500 2.000 0.175833
-    ## ARCH Lag[5]    10.888 1.440 1.667 0.003986
-    ## ARCH Lag[7]    11.957 2.315 1.543 0.006355
+    ##             Statistic Shape Scale P-Value
+    ## ARCH Lag[3]    0.1026 0.500 2.000 0.74870
+    ## ARCH Lag[5]    8.4738 1.440 1.667 0.01543
+    ## ARCH Lag[7]   10.2115 2.315 1.543 0.01643
     ## 
     ## Nyblom stability test
     ## ------------------------------------
-    ## Joint Statistic:  8.1748
+    ## Joint Statistic:  1.9737
     ## Individual Statistics:              
-    ## mu     0.04486
-    ## ar1    0.05302
-    ## omega  1.71482
-    ## alpha1 0.29833
-    ## beta1  0.24180
+    ## mu     0.05157
+    ## ar1    0.06420
+    ## omega  0.63735
+    ## alpha1 0.30490
+    ## beta1  0.24645
     ## 
     ## Asymptotic Critical Values (10% 5% 1%)
     ## Joint Statistic:          1.28 1.47 1.88
@@ -246,22 +226,22 @@ garchfit1
     ## Sign Bias Test
     ## ------------------------------------
     ##                    t-value   prob sig
-    ## Sign Bias          0.69674 0.4861    
-    ## Negative Sign Bias 0.01763 0.9859    
-    ## Positive Sign Bias 1.37531 0.1693    
-    ## Joint Effect       5.45206 0.1415    
+    ## Sign Bias           0.8644 0.3876    
+    ## Negative Sign Bias  0.3926 0.6947    
+    ## Positive Sign Bias  0.9808 0.3269    
+    ## Joint Effect        3.8894 0.2737    
     ## 
     ## 
     ## Adjusted Pearson Goodness-of-Fit Test:
     ## ------------------------------------
     ##   group statistic p-value(g-1)
-    ## 1    20     19.16       0.4467
-    ## 2    30     34.36       0.2262
-    ## 3    40     42.64       0.3173
-    ## 4    50     43.49       0.6952
+    ## 1    20     29.53      0.05811
+    ## 2    30     44.09      0.03596
+    ## 3    40     44.40      0.25450
+    ## 4    50     64.71      0.06559
     ## 
     ## 
-    ## Elapsed time : 0.2213342
+    ## Elapsed time : 0.227942
 
 ``` r
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
@@ -294,66 +274,66 @@ garchfitx
     ## Optimal Parameters
     ## ------------------------------------
     ##         Estimate  Std. Error  t value Pr(>|t|)
-    ## mu     -0.000381    0.000355 -1.07457 0.282567
-    ## ar1    -0.018045    0.035910 -0.50252 0.615302
-    ## omega   0.000000    0.000003  0.00000 1.000000
-    ## alpha1  0.119649    0.040245  2.97305 0.002949
-    ## beta1   0.327516    0.132646  2.46911 0.013545
-    ## vxreg1  0.002659    0.000750  3.54783 0.000388
+    ## mu     -0.000757    0.000314  -2.4142 0.015770
+    ## ar1    -0.036702    0.033726  -1.0882 0.276489
+    ## omega   0.000000    0.000004   0.0000 1.000000
+    ## alpha1  0.078654    0.036104   2.1785 0.029368
+    ## beta1   0.198341    0.062180   3.1898 0.001424
+    ## vxreg1  0.003904    0.000451   8.6571 0.000000
     ## 
     ## Robust Standard Errors:
     ##         Estimate  Std. Error  t value Pr(>|t|)
-    ## mu     -0.000381    0.001491 -0.25568  0.79820
-    ## ar1    -0.018045    0.052175 -0.34586  0.72945
-    ## omega   0.000000    0.000007  0.00000  1.00000
-    ## alpha1  0.119649    0.227176  0.52668  0.59842
-    ## beta1   0.327516    0.913558  0.35851  0.71996
-    ## vxreg1  0.002659    0.005160  0.51537  0.60629
+    ## mu     -0.000757    0.000368  -2.0554 0.039838
+    ## ar1    -0.036702    0.031020  -1.1832 0.236739
+    ## omega   0.000000    0.000002   0.0000 1.000000
+    ## alpha1  0.078654    0.075884   1.0365 0.299971
+    ## beta1   0.198341    0.119536   1.6593 0.097064
+    ## vxreg1  0.003904    0.000889   4.3930 0.000011
     ## 
-    ## LogLikelihood : 3180.455 
+    ## LogLikelihood : 3121.685 
     ## 
     ## Information Criteria
     ## ------------------------------------
     ##                     
-    ## Akaike       -6.3553
-    ## Bayes        -6.3258
-    ## Shibata      -6.3553
-    ## Hannan-Quinn -6.3441
+    ## Akaike       -6.2376
+    ## Bayes        -6.2081
+    ## Shibata      -6.2377
+    ## Hannan-Quinn -6.2264
     ## 
     ## Weighted Ljung-Box Test on Standardized Residuals
     ## ------------------------------------
     ##                         statistic p-value
-    ## Lag[1]                     0.1976  0.6567
-    ## Lag[2*(p+q)+(p+q)-1][2]    0.2091  0.9986
-    ## Lag[4*(p+q)+(p+q)-1][5]    4.2838  0.1838
+    ## Lag[1]                    0.01314  0.9087
+    ## Lag[2*(p+q)+(p+q)-1][2]   0.05056  1.0000
+    ## Lag[4*(p+q)+(p+q)-1][5]   3.25138  0.3707
     ## d.o.f=1
     ## H0 : No serial correlation
     ## 
     ## Weighted Ljung-Box Test on Standardized Squared Residuals
     ## ------------------------------------
     ##                         statistic   p-value
-    ## Lag[1]                       1.47 2.253e-01
-    ## Lag[2*(p+q)+(p+q)-1][5]     30.73 1.971e-08
-    ## Lag[4*(p+q)+(p+q)-1][9]     48.84 2.220e-12
+    ## Lag[1]                     0.5688 4.508e-01
+    ## Lag[2*(p+q)+(p+q)-1][5]   48.8187 1.382e-13
+    ## Lag[4*(p+q)+(p+q)-1][9]   75.5610 0.000e+00
     ## d.o.f=2
     ## 
     ## Weighted ARCH LM Tests
     ## ------------------------------------
     ##             Statistic Shape Scale   P-Value
-    ## ARCH Lag[3]     23.33 0.500 2.000 1.365e-06
-    ## ARCH Lag[5]     40.85 1.440 1.667 1.062e-10
-    ## ARCH Lag[7]     47.74 2.315 1.543 2.941e-12
+    ## ARCH Lag[3]     9.965 0.500 2.000 1.596e-03
+    ## ARCH Lag[5]    49.129 1.440 1.667 8.010e-13
+    ## ARCH Lag[7]    58.516 2.315 1.543 3.553e-15
     ## 
     ## Nyblom stability test
     ## ------------------------------------
-    ## Joint Statistic:  47.6351
-    ## Individual Statistics:               
-    ## mu      0.08197
-    ## ar1     0.04436
-    ## omega  11.03431
-    ## alpha1  1.10188
-    ## beta1   1.08068
-    ## vxreg1  1.29789
+    ## Joint Statistic:  14.7888
+    ## Individual Statistics:             
+    ## mu     0.1613
+    ## ar1    0.1008
+    ## omega  5.5842
+    ## alpha1 1.0499
+    ## beta1  0.8486
+    ## vxreg1 1.3700
     ## 
     ## Asymptotic Critical Values (10% 5% 1%)
     ## Joint Statistic:          1.49 1.68 2.12
@@ -362,76 +342,174 @@ garchfitx
     ## Sign Bias Test
     ## ------------------------------------
     ##                    t-value    prob sig
-    ## Sign Bias          1.85456 0.06396   *
-    ## Negative Sign Bias 0.04475 0.96432    
-    ## Positive Sign Bias 0.09030 0.92806    
-    ## Joint Effect       6.20856 0.10189    
+    ## Sign Bias           1.9306 0.05381   *
+    ## Negative Sign Bias  0.1105 0.91203    
+    ## Positive Sign Bias  0.9277 0.35376    
+    ## Joint Effect        4.6324 0.20078    
     ## 
     ## 
     ## Adjusted Pearson Goodness-of-Fit Test:
     ## ------------------------------------
     ##   group statistic p-value(g-1)
-    ## 1    20     31.05      0.03987
-    ## 2    30     40.43      0.07716
-    ## 3    40     51.53      0.08629
-    ## 4    50     60.31      0.12904
+    ## 1    20     42.74     0.001406
+    ## 2    30     54.48     0.002845
+    ## 3    40     61.46     0.012368
+    ## 4    50     66.32     0.050199
     ## 
     ## 
-    ## Elapsed time : 0.367398
+    ## Elapsed time : 0.382401
 
-# Created:
+## Veiw the two conditional variance plots
 
 ``` r
-# library(RA)
-# load_core()
-# Root <- setroot()
-# EQSScreen <- "Tickers"
-# UniverseSelect <- "JALSHAll"
-# currency <- c("Local", "USD")[1]
-# Price_Field = c("TOT_RETURN_INDEX_GROSS_DVDS", "PX_LAST")[1]
-# 
-# NonTradeDays <- RA::NonTradeDays(Root)
-# IntraDays <-
-#   datload(Root, "FullIDay", Intraday_Data) %>%
-#   filter(!date %in% NonTradeDays) %>% mutate(Tickers = gsub(" SJ Equity", "", Tickers))
-# 
-# wts <-
-#   datload(Root, SaveName = "EQS_Return_Daily", Db_Factors_Merge, UQ(EQSScreen), UQ(UniverseSelect), UQ(currency), UQ(Price_Field), EQS_Return_Daily)
-# 
-# ID_Disp <- IntraDays %>% select(date, contains("_Dispersion"), contains("_PXMove") ) %>% unique
-# 
-# IVol_J200 <-
-#   left_join(IntraDays,
-#             wts %>% mutate(Tickers = gsub(" SJ Equity", "", Tickers)) %>% select(date, Tickers, wt = J200_W_Adj) %>% filter(!is.na(wt)),
-#             by = c("date", "Tickers")) %>%
-#   select(date, Tickers, RV, J200 = wt) %>% filter(!is.na(J200)) %>%
-#   group_by(date) %>% mutate(J200 = J200 / sum(J200)) %>% summarise(Avg_RV = mean(RV), W_Avg_RV_J200 = sum(J200 * RV) ) %>% ungroup() %>% unique
-# 
-# datstore(Root, SaveName = "J200_IVol", dataframe = IVol_J200,
-#          Research, FMX_Projects_2020, Charles, data)
-# 
-# IVol_J400 <-
-#   left_join(IntraDays,
-#             wts %>% mutate(Tickers = gsub(" SJ Equity", "", Tickers)) %>% select(date, Tickers, wt = J400_W_Adj) %>% filter(!is.na(wt)),
-#             by = c("date", "Tickers")) %>%
-#   select(date, Tickers, RV, J400 = wt) %>% filter(!is.na(J400)) %>%
-#     group_by(date) %>% mutate(J400 = J400 / sum(J400)) %>% summarise(Avg_RV = mean(RV), W_Avg_RV_J400 = sum(J400 * RV)) %>% ungroup() %>% unique
-# 
-# datstore(Root, SaveName = "J400_IVol", dataframe = IVol_J400,
-#          Research, FMX_Projects_2020, Charles, data)
-# 
-# datstore(Root, SaveName = "ID_Disp", dataframe = ID_Disp,
-#          Research, FMX_Projects_2020, Charles, data)
-# 
-# bind_rows(
-#   "D:/Work/RAnalytics/Data/Dispersion/Monthly/1" %>% list.files(., full.names = T, recursive = T) %>%
-#   as.list() %>% map_df(~read_rds(.)) %>% select(date, Dispersion_U, Dispersion_W, Avg_Corr, W_SD, Avg_SD, Idx) %>% unique %>% mutate(Freq = "1_Month"),
-#   "D:/Work/RAnalytics/Data/Dispersion/Monthly/3" %>% list.files(., full.names = T, recursive = T) %>%
-#   as.list() %>% map_df(~read_rds(.)) %>% select(date, Dispersion_U, Dispersion_W, Avg_Corr, W_SD, Idx) %>% unique %>% mutate(Freq = "3_Month")
-# ) %>%
-#   write_rds("data/Dispersion/Monthly.rds")
-# 
-#  "D:/Work/RAnalytics/Data/Dispersion/Weekly/1" %>% list.files(., full.names = T, recursive = T) %>%
-#  map_df(~read_rds(.)) %>% select(date, Dispersion_U, Dispersion_W, Avg_Corr, W_SD, Idx) %>% unique %>% mutate(Freq = "Weekly") %>% 
-#  write_rds("data/Dispersion/Weekly.rds")
+# First for the garch-x
+sigmax <- sigma(garchfitx) %>% xts_tbl()
+colnames(sigmax) <- c("date", "sigma")
+sigmax <- sigmax %>% mutate(date = as.Date(date))
+
+
+ggplot() + geom_line(data = Plotdata %>% filter(ReturnType == 
+    "Returns_Sqd") %>% select(date, Returns) %>% unique %>% mutate(Returns = sqrt(Returns)), 
+    aes(x = date, y = Returns)) + geom_line(data = sigmax, aes(x = date, 
+    y = sigma), color = "red", size = 2, alpha = 0.8) + theme_bw() + 
+    # scale_y_continuous(limits = c(0, 0.35)) +
+labs(title = "Comparison: Returns Sigma vs Sigma from Garch", 
+    subtitle = "Note the smoothing effect of garch, as noise is controlled for.", 
+    x = "", y = "Comparison of estimated volatility")
 ```
+
+![](README_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+``` r
+# now for the garch
+
+sigma <- sigma(garchfit1) %>% xts_tbl()
+colnames(sigma) <- c("date", "sigma")
+sigma <- sigma %>% mutate(date = as.Date(date))
+
+ggplot() + geom_line(data = Plotdata %>% filter(ReturnType == 
+    "Returns_Sqd") %>% select(date, Returns) %>% unique %>% mutate(Returns = sqrt(Returns)), 
+    aes(x = date, y = Returns)) + geom_line(data = sigma, aes(x = date, 
+    y = sigma), color = "red", size = 2, alpha = 0.8) + theme_bw() + 
+    # scale_y_continuous(limits = c(0, 0.35)) +
+labs(title = "Comparison: Returns Sigma vs Sigma from Garch", 
+    subtitle = "Note the smoothing effect of garch, as noise is controlled for.", 
+    x = "", y = "Comparison of estimated volatility")
+```
+
+![](README_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
+
+``` r
+plot(garchfitx, which = 3)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-4-3.png)<!-- -->
+
+``` r
+plot(garchfit1, which = 3)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-4-4.png)<!-- -->
+
+``` r
+# testing the fit 
+
+infocriteria(garchfit1)
+```
+
+    ##                       
+    ## Akaike       -6.176643
+    ## Bayes        -6.152085
+    ## Shibata      -6.176693
+    ## Hannan-Quinn -6.167309
+
+``` r
+infocriteria(garchfitx)
+```
+
+    ##                       
+    ## Akaike       -6.237609
+    ## Bayes        -6.208139
+    ## Shibata      -6.237680
+    ## Hannan-Quinn -6.226407
+
+## forecast vol with the two models
+
+``` r
+garchfx <- ugarchforecast(garchfitx, n.ahead = 30)
+garchf <- ugarchforecast(garchfit1, n.ahead = 5)
+
+plot(garchfx, which = 1)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+
+``` r
+plot(garchf, which = 1)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-5-2.png)<!-- -->
+
+``` r
+# rolling forecast
+
+cl <- makePSOCKcluster(10)
+spec <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = NULL), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution = "norm")
+# Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
+# normal distribution
+
+roll <- ugarchroll(spec, fit, forecast.length = 500, refit.every = 50, 
+    refit.window = "moving", window.size = 1000, calculate.VaR = TRUE, 
+    VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
+
+# For this, only 1-step ahead can be done automatically.
+show(roll)
+```
+
+    ## 
+    ## *-------------------------------------*
+    ## *              GARCH Roll             *
+    ## *-------------------------------------*
+    ## No.Refits        : 10
+    ## Refit Horizon    : 50
+    ## No.Forecasts : 500
+    ## GARCH Model      : sGARCH(1,1)
+    ## Distribution : norm 
+    ## 
+    ## Forecast Density:
+    ##               Mu  Sigma Skew Shape Shape(GIG) Realized
+    ## 2018-07-31 6e-04 0.0113    0     0          0   0.0009
+    ## 2018-08-01 6e-04 0.0109    0     0          0   0.0005
+    ## 2018-08-02 6e-04 0.0106    0     0          0  -0.0203
+    ## 2018-08-03 7e-04 0.0115    0     0          0   0.0134
+    ## 2018-08-06 6e-04 0.0115    0     0          0  -0.0055
+    ## 2018-08-07 7e-04 0.0113    0     0          0   0.0160
+    ## 
+    ## ..........................
+    ##               Mu  Sigma Skew Shape Shape(GIG) Realized
+    ## 2020-07-24 5e-04 0.0104    0     0          0  -0.0126
+    ## 2020-07-27 7e-04 0.0108    0     0          0   0.0118
+    ## 2020-07-28 4e-04 0.0109    0     0          0   0.0071
+    ## 2020-07-29 4e-04 0.0105    0     0          0   0.0052
+    ## 2020-07-30 5e-04 0.0101    0     0          0  -0.0177
+    ## 2020-07-31 7e-04 0.0114    0     0          0  -0.0045
+    ## 
+    ## Elapsed: 16.48675 secs
+
+``` r
+report(roll, type = "fpm")
+```
+
+    ## 
+    ## GARCH Roll Mean Forecast Performance Measures
+    ## ---------------------------------------------
+    ## Model        : sGARCH
+    ## No.Refits    : 10
+    ## No.Forecasts: 500
+    ## 
+    ##         Stats
+    ## MSE 0.0002501
+    ## MAE 0.0106900
+    ## DAC 0.5060000
