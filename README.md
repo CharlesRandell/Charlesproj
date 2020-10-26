@@ -323,7 +323,7 @@ garchfit1
     ## 4    50     57.01      0.20186
     ## 
     ## 
-    ## Elapsed time : 0.4357319
+    ## Elapsed time : 0.4559879
 
 ``` r
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
@@ -439,7 +439,7 @@ garchfitx
     ## 4    50     82.23     0.002063
     ## 
     ## 
-    ## Elapsed time : 0.3913319
+    ## Elapsed time : 0.420819
 
 ## Veiw the two conditional variance plots
 
@@ -593,7 +593,7 @@ show(roll)
     ## 2020-07-30 4e-04 0.0092    0     0          0  -0.0175
     ## 2020-07-31 5e-04 0.0107    0     0          0  -0.0050
     ## 
-    ## Elapsed: 14.8209 secs
+    ## Elapsed: 16.19747 secs
 
 ``` r
 report(roll, type = "fpm")
@@ -651,7 +651,7 @@ show(rollx)
     ## 2020-07-30 -6e-04 0.0096    0     0          0  -0.0175
     ## 2020-07-31 -4e-04 0.0114    0     0          0  -0.0050
     ## 
-    ## Elapsed: 2.715621 secs
+    ## Elapsed: 2.698338 secs
 
 ``` r
 report(rollx, type = "fpm")
