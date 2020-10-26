@@ -10,9 +10,17 @@ In the data folder, I give you the intra-day dispersion numbers for the J200 (AL
 Also included is the weekly and 1 and 3 monthly calculated dispersion, avg stock correlation and avg SD calcs for J200, J400, J300 and J430. This is a treasure trove of data.
 
 
+```{r}
+library(rmsfuns)
+library(fmxdat)
+if (!require(robustbase)) install.packages("robustbase")
+load_pkg(c("tidyverse", "devtools", "rugarch", "forecast", "tbl2xts", 
+    "lubridate", "PerformanceAnalytics", "ggthemes"))
+library(tidyverse)
+```
+
 
 ```{r}
-library(tidyverse)
 
 # Intraday dispersion last 4 years:
 ID_Disp <- read_rds("data/ID_Disp.rds") %>% filter(date >= as.Date("2016-07-29") & date <= as.Date("2020-07-31"))
@@ -44,14 +52,14 @@ M_Dispersion <-
 
 ## Importing index returns data 
 
+The returns data used to construct the 
+
 ```{r}
 library(tbl2xts)
 
 # the JSE top 40 index used to create a simple return index
 
-view(fmxdat::SA_Indexes)
-
-TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHR40TR Index") %>% 
+TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHRALTR Index") %>% 
     mutate(SimpleRet = Price / lag(Price)-1) %>% 
     ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
 
@@ -66,6 +74,27 @@ ggplot(Plotdata) + geom_line(aes(x = date, y = Returns, colour = ReturnType,
     facet_wrap(~ReturnType, nrow = 3, ncol = 1, scales = "free") + 
     guides(alpha = FALSE, colour = FALSE) + theme_bw()
 
+```
+
+
+## tests
+
+```{r}
+forecast::Acf(TP40, main = "ACF: Equally Weighted Return")
+```
+
+```{r}
+forecast::Acf(TP40^2, main = "ACF: Squared Equally Weighted Return")
+```
+
+```{r}
+forecast::Acf(abs(TP40), main = "ACF: Absolute Equally Weighted Return")
+```
+
+These test prove that there is conditional heteroskedasticity in the data - there is volatility is clustering. 
+
+```{r}
+Box.test(coredata(TP40^2), type = "Ljung-Box", lag = 12)
 ```
 
 
@@ -104,7 +133,7 @@ garch1 <- ugarchspec(variance.model = list(model = c("sGARCH",
 
 garchfit1 = ugarchfit(spec = garch1, data = fit)
 
-print(garchfit1)
+garchfit1
 
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
 
@@ -137,9 +166,9 @@ sigmax <- sigmax %>% mutate(date = as.Date(date))
 ggplot() + geom_line(data = Plotdata %>% filter(ReturnType == 
     "Returns_Sqd") %>% select(date, Returns) %>% unique %>% mutate(Returns = sqrt(Returns)), 
     aes(x = date, y = Returns)) + geom_line(data = sigmax, aes(x = date, 
-    y = sigma), color = "red", size = 2, alpha = 0.8) + theme_bw() + 
+    y = sigma), color = "red", size = 1, alpha = 0.8) + theme_bw() + 
     # scale_y_continuous(limits = c(0, 0.35)) +
-labs(title = "Comparison: Returns Sigma vs Sigma from Garch", 
+labs(title = "Comparison: Returns Sigma vs Sigma from Garch-x", 
     subtitle = "Note the smoothing effect of garch, as noise is controlled for.", 
     x = "", y = "Comparison of estimated volatility")
 
@@ -153,11 +182,12 @@ sigma <- sigma %>% mutate(date = as.Date(date))
 ggplot() + geom_line(data = Plotdata %>% filter(ReturnType == 
     "Returns_Sqd") %>% select(date, Returns) %>% unique %>% mutate(Returns = sqrt(Returns)), 
     aes(x = date, y = Returns)) + geom_line(data = sigma, aes(x = date, 
-    y = sigma), color = "red", size = 2, alpha = 0.8) + theme_bw() + 
+    y = sigma), color = "red", size = 1, alpha = 0.8) + theme_bw() + 
     # scale_y_continuous(limits = c(0, 0.35)) +
 labs(title = "Comparison: Returns Sigma vs Sigma from Garch", 
     subtitle = "Note the smoothing effect of garch, as noise is controlled for.", 
     x = "", y = "Comparison of estimated volatility")
+
 
 
 plot(garchfitx, which = 3)
@@ -177,23 +207,21 @@ infocriteria(garchfitx)
 
 ```{r}
 garchfx <- ugarchforecast(garchfitx, n.ahead = 30)
-garchf <- ugarchforecast(garchfit1, n.ahead = 5)
+garchf <- ugarchforecast(garchfit1, n.ahead = 30)
 
 plot(garchfx, which = 1)
 plot(garchf, which = 1)
 
-
+plot(garchfx, which = 3)
+plot(garchf, which = 3)
 
 # rolling forecast
 
 cl <- makePSOCKcluster(10)
-spec <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
-    1), external.regressors = NULL), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
-    distribution = "norm")
 # Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
 # normal distribution
 
-roll <- ugarchroll(spec, fit, forecast.length = 500, refit.every = 50, 
+roll <- ugarchroll(garch1, fit, forecast.length = 500, refit.every = 50, 
     refit.window = "moving", window.size = 1000, calculate.VaR = TRUE, 
     VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
 
@@ -203,6 +231,36 @@ show(roll)
 
 report(roll, type = "fpm")
 
+# Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
+# normal distribution
+
+rollx <- ugarchroll(garchx, fit, forecast.length = 500, refit.every = 50, 
+    refit.window = "moving", window.size = 1000, calculate.VaR = TRUE, 
+    VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
+
+# For this, only 1-step ahead can be done automatically.
+show(rollx)
+
+
+report(rollx, type = "fpm")
+
+report(roll, type = "fpm")
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
