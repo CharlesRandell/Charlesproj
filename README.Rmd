@@ -59,13 +59,13 @@ library(tbl2xts)
 
 # the JSE top 40 index used to create a simple return index
 
-TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHRALTR Index") %>% 
-    mutate(SimpleRet = Price / lag(Price)-1) %>% 
-    ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
+#TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHRALTR Index") %>% 
+#    mutate(SimpleRet = Price / lag(Price)-1) %>% 
+#    ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
 
 # locally storing the TP40 data
 
-saveRDS(TP40, file = "data/TP40.rds")
+# saveRDS(TP40, file = "data/TP40.rds")
 
 TP40 <- read_rds("data/TP40.rds")
 

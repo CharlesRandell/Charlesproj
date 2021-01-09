@@ -131,13 +131,13 @@ library(tbl2xts)
 
 # the JSE top 40 index used to create a simple return index
 
-TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHRALTR Index") %>% 
-    mutate(SimpleRet = Price / lag(Price)-1) %>% 
-    ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
+#TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHRALTR Index") %>% 
+#    mutate(SimpleRet = Price / lag(Price)-1) %>% 
+#    ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
 
 # locally storing the TP40 data
 
-saveRDS(TP40, file = "data/TP40.rds")
+# saveRDS(TP40, file = "data/TP40.rds")
 
 TP40 <- read_rds("data/TP40.rds")
 
@@ -331,7 +331,7 @@ garchfit1
     ## 4    50     57.01      0.20186
     ## 
     ## 
-    ## Elapsed time : 0.1857841
+    ## Elapsed time : 0.4410582
 
 ``` r
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
@@ -447,7 +447,7 @@ garchfitx
     ## 4    50     82.23     0.002063
     ## 
     ## 
-    ## Elapsed time : 0.5559502
+    ## Elapsed time : 0.461978
 
 ## Veiw the two conditional variance plots
 
@@ -601,7 +601,7 @@ show(roll)
     ## 2020-07-30 4e-04 0.0092    0     0          0  -0.0175
     ## 2020-07-31 5e-04 0.0107    0     0          0  -0.0050
     ## 
-    ## Elapsed: 16.27177 secs
+    ## Elapsed: 17.37014 secs
 
 ``` r
 report(roll, type = "fpm")
@@ -659,7 +659,7 @@ show(rollx)
     ## 2020-07-30 -6e-04 0.0096    0     0          0  -0.0175
     ## 2020-07-31 -4e-04 0.0114    0     0          0  -0.0050
     ## 
-    ## Elapsed: 2.28865 secs
+    ## Elapsed: 3.176265 secs
 
 ``` r
 report(rollx, type = "fpm")
