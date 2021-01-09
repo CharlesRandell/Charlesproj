@@ -35,6 +35,6 @@ vignettes/*.pdf
 *.utf8.md
 *.knit.md
 
-# never save data
+# never save data (in this case save the data)
 
-/data
+
