@@ -135,6 +135,14 @@ TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHRALTR Index") %>%
     mutate(SimpleRet = Price / lag(Price)-1) %>% 
     ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
 
+# locally storing the TP40 data
+
+saveRDS(TP40, file = "data/TP40.rds")
+
+TP40 <- read_rds("data/TP40.rds")
+
+# plotting the data 
+
 Plotdata <- cbind(TP40, TP40^2, abs(TP40))
 colnames(Plotdata) <- c("Returns", "Returns_Sqd", "Returns_Abs")
 
@@ -323,7 +331,7 @@ garchfit1
     ## 4    50     57.01      0.20186
     ## 
     ## 
-    ## Elapsed time : 0.4559879
+    ## Elapsed time : 0.1857841
 
 ``` r
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
@@ -439,7 +447,7 @@ garchfitx
     ## 4    50     82.23     0.002063
     ## 
     ## 
-    ## Elapsed time : 0.420819
+    ## Elapsed time : 0.5559502
 
 ## Veiw the two conditional variance plots
 
@@ -593,7 +601,7 @@ show(roll)
     ## 2020-07-30 4e-04 0.0092    0     0          0  -0.0175
     ## 2020-07-31 5e-04 0.0107    0     0          0  -0.0050
     ## 
-    ## Elapsed: 16.19747 secs
+    ## Elapsed: 16.27177 secs
 
 ``` r
 report(roll, type = "fpm")
@@ -651,7 +659,7 @@ show(rollx)
     ## 2020-07-30 -6e-04 0.0096    0     0          0  -0.0175
     ## 2020-07-31 -4e-04 0.0114    0     0          0  -0.0050
     ## 
-    ## Elapsed: 2.698338 secs
+    ## Elapsed: 2.28865 secs
 
 ``` r
 report(rollx, type = "fpm")
@@ -684,3 +692,39 @@ report(roll, type = "fpm")
     ## MSE 0.0002235
     ## MAE 0.0098640
     ## DAC 0.5180000
+
+## Run an AR(1) on
+
+``` r
+ARTP40 <- arima(TP40, order = c(1, 0, 0))
+
+ARTP40
+```
+
+    ## 
+    ## Call:
+    ## arima(x = TP40, order = c(1, 0, 0))
+    ## 
+    ## Coefficients:
+    ##          ar1  intercept
+    ##       0.0164      6e-04
+    ## s.e.  0.0147      2e-04
+    ## 
+    ## sigma^2 estimated as 0.0001303:  log likelihood = 14179.27,  aic = -28352.53
+
+``` r
+ARexreg <- arima(exreg, order = c(1, 0, 0))
+
+ARexreg
+```
+
+    ## 
+    ## Call:
+    ## arima(x = exreg, order = c(1, 0, 0))
+    ## 
+    ## Coefficients:
+    ##          ar1  intercept
+    ##       0.5082     0.0231
+    ## s.e.  0.0272     0.0007
+    ## 
+    ## sigma^2 estimated as 0.0001357:  log likelihood = 3030.5,  aic = -6054.99

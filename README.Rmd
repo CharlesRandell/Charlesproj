@@ -63,6 +63,14 @@ TP40 <- fmxdat::SA_Indexes %>% filter(Tickers == "JSHRALTR Index") %>%
     mutate(SimpleRet = Price / lag(Price)-1) %>% 
     ungroup() %>% select(date, SimpleRet) %>% tbl2xts::tbl_xts()
 
+# locally storing the TP40 data
+
+saveRDS(TP40, file = "data/TP40.rds")
+
+TP40 <- read_rds("data/TP40.rds")
+
+# plotting the data 
+
 Plotdata <- cbind(TP40, TP40^2, abs(TP40))
 colnames(Plotdata) <- c("Returns", "Returns_Sqd", "Returns_Abs")
 
@@ -250,10 +258,18 @@ report(roll, type = "fpm")
 
 
 
+## Run an AR(1) on 
 
+```{r}
+ARTP40 <- arima(TP40, order = c(1, 0, 0))
 
+ARTP40
 
+ARexreg <- arima(exreg, order = c(1, 0, 0))
 
+ARexreg
+
+```
 
 
 
