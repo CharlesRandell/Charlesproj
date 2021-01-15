@@ -11,87 +11,10 @@ avg stock correlation and avg SD calcs for J200, J400, J300 and J430.
 This is a treasure trove of data.
 
 ``` r
-library(rmsfuns)
-library(fmxdat)
-if (!require(robustbase)) install.packages("robustbase")
-```
-
-    ## Loading required package: robustbase
-
-``` r
-load_pkg(c("tidyverse", "devtools", "rugarch", "forecast", "tbl2xts", 
-    "lubridate", "PerformanceAnalytics", "ggthemes"))
-```
-
-    ## ── Attaching packages ─────────────────────────────────────── tidyverse 1.3.0 ──
-
-    ## ✓ ggplot2 3.3.2     ✓ purrr   0.3.4
-    ## ✓ tibble  3.0.4     ✓ dplyr   1.0.2
-    ## ✓ tidyr   1.1.2     ✓ stringr 1.4.0
-    ## ✓ readr   1.3.1     ✓ forcats 0.4.0
-
-    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-    ## x dplyr::filter() masks stats::filter()
-    ## x dplyr::lag()    masks stats::lag()
-
-    ## Loading required package: usethis
-
-    ## Loading required package: parallel
-
-    ## 
-    ## Attaching package: 'rugarch'
-
-    ## The following object is masked from 'package:purrr':
-    ## 
-    ##     reduce
-
-    ## The following object is masked from 'package:stats':
-    ## 
-    ##     sigma
-
-    ## Registered S3 method overwritten by 'quantmod':
-    ##   method            from
-    ##   as.zoo.data.frame zoo
-
-    ## 
-    ## Attaching package: 'lubridate'
-
-    ## The following object is masked from 'package:base':
-    ## 
-    ##     date
-
-    ## Loading required package: xts
-
-    ## Loading required package: zoo
-
-    ## 
-    ## Attaching package: 'zoo'
-
-    ## The following objects are masked from 'package:base':
-    ## 
-    ##     as.Date, as.Date.numeric
-
-    ## 
-    ## Attaching package: 'xts'
-
-    ## The following objects are masked from 'package:dplyr':
-    ## 
-    ##     first, last
-
-    ## 
-    ## Attaching package: 'PerformanceAnalytics'
-
-    ## The following object is masked from 'package:graphics':
-    ## 
-    ##     legend
-
-``` r
-library(tidyverse)
-```
-
-``` r
 # Intraday dispersion last 4 years:
 ID_Disp <- read_rds("data/ID_Disp.rds") %>% filter(date >= as.Date("2016-07-29") & date <= as.Date("2020-07-31"))
+
+ID_dispw <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>% tbl_xts() %>% apply.weekly(mean)
 
 ID_Disp %>% 
   ggplot() + 
@@ -99,7 +22,7 @@ ID_Disp %>%
   geom_line(aes(date, ID_Dispersion_W_J200), color = "red")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
 
 ``` r
 # Intraday weighted average realized volatility:
@@ -112,7 +35,7 @@ Ivol %>% filter(Type == "W_Avg_RV") %>%
   labs(title = "Weighted Avg Realized Volatility") + theme_bw()
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
 
 ``` r
 # Dispersion - lower frequency
@@ -155,7 +78,7 @@ ggplot(Plotdata) + geom_line(aes(x = date, y = Returns, colour = ReturnType,
     guides(alpha = FALSE, colour = FALSE) + theme_bw()
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
 
 ## tests
 
@@ -163,19 +86,19 @@ ggplot(Plotdata) + geom_line(aes(x = date, y = Returns, colour = ReturnType,
 forecast::Acf(TP40, main = "ACF: Equally Weighted Return")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
 
 ``` r
 forecast::Acf(TP40^2, main = "ACF: Squared Equally Weighted Return")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-3-2.png)<!-- -->
 
 ``` r
 forecast::Acf(abs(TP40), main = "ACF: Absolute Equally Weighted Return")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-3-3.png)<!-- -->
 
 These test prove that there is conditional heteroskedasticity in the
 data - there is volatility is clustering.
@@ -191,6 +114,8 @@ Box.test(coredata(TP40^2), type = "Ljung-Box", lag = 12)
     ## X-squared = 4772.6, df = 12, p-value < 2.2e-16
 
 # Estimating the GARCH
+
+## Simple GARCH on returns
 
 ``` r
 library(rugarch)
@@ -208,7 +133,7 @@ comb %>% xts_tbl() %>%
   geom_line(aes(date, SimpleRet), color = "red")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 ``` r
 # remove the NAs - temporary solution 
@@ -218,8 +143,7 @@ comb[is.na(comb)] <- 0
 colSums(is.na(comb))
 ```
 
-    ## ID_Dispersion_W_J400            SimpleRet 
-    ##                    0                    0
+ID\_Dispersion\_W\_J400 SimpleRet 0 0
 
 ``` r
 fit <- comb[,2]
@@ -234,104 +158,442 @@ garch1 <- ugarchspec(variance.model = list(model = c("sGARCH",
 
 garchfit1 = ugarchfit(spec = garch1, data = fit)
 
-garchfit1
+kable(garchfit1@fit$matcoef, format = "html")
 ```
 
-    ## 
-    ## *---------------------------------*
-    ## *          GARCH Model Fit        *
-    ## *---------------------------------*
-    ## 
-    ## Conditional Variance Dynamics    
-    ## -----------------------------------
-    ## GARCH Model  : sGARCH(1,1)
-    ## Mean Model   : ARFIMA(1,0,0)
-    ## Distribution : norm 
-    ## 
-    ## Optimal Parameters
-    ## ------------------------------------
-    ##         Estimate  Std. Error  t value Pr(>|t|)
-    ## mu      0.000447    0.000275  1.62563  0.10403
-    ## ar1    -0.017196    0.034305 -0.50126  0.61619
-    ## omega   0.000003    0.000003  1.23787  0.21576
-    ## alpha1  0.117497    0.021593  5.44140  0.00000
-    ## beta1   0.857182    0.027439 31.23900  0.00000
-    ## 
-    ## Robust Standard Errors:
-    ##         Estimate  Std. Error  t value Pr(>|t|)
-    ## mu      0.000447    0.000273  1.63828 0.101362
-    ## ar1    -0.017196    0.033075 -0.51990 0.603132
-    ## omega   0.000003    0.000011  0.30422 0.760961
-    ## alpha1  0.117497    0.034836  3.37291 0.000744
-    ## beta1   0.857182    0.081158 10.56194 0.000000
-    ## 
-    ## LogLikelihood : 3188.439 
-    ## 
-    ## Information Criteria
-    ## ------------------------------------
-    ##                     
-    ## Akaike       -6.3733
-    ## Bayes        -6.3487
-    ## Shibata      -6.3733
-    ## Hannan-Quinn -6.3639
-    ## 
-    ## Weighted Ljung-Box Test on Standardized Residuals
-    ## ------------------------------------
-    ##                         statistic p-value
-    ## Lag[1]                     0.2829  0.5948
-    ## Lag[2*(p+q)+(p+q)-1][2]    0.3813  0.9861
-    ## Lag[4*(p+q)+(p+q)-1][5]    1.3553  0.8804
-    ## d.o.f=1
-    ## H0 : No serial correlation
-    ## 
-    ## Weighted Ljung-Box Test on Standardized Squared Residuals
-    ## ------------------------------------
-    ##                         statistic p-value
-    ## Lag[1]                     0.6879  0.4069
-    ## Lag[2*(p+q)+(p+q)-1][5]    4.5836  0.1897
-    ## Lag[4*(p+q)+(p+q)-1][9]    7.8078  0.1404
-    ## d.o.f=2
-    ## 
-    ## Weighted ARCH LM Tests
-    ## ------------------------------------
-    ##             Statistic Shape Scale P-Value
-    ## ARCH Lag[3]    0.3474 0.500 2.000 0.55556
-    ## ARCH Lag[5]    7.6439 1.440 1.667 0.02444
-    ## ARCH Lag[7]    9.0181 2.315 1.543 0.03096
-    ## 
-    ## Nyblom stability test
-    ## ------------------------------------
-    ## Joint Statistic:  3.0036
-    ## Individual Statistics:              
-    ## mu     0.04608
-    ## ar1    0.07010
-    ## omega  0.91139
-    ## alpha1 0.33982
-    ## beta1  0.27512
-    ## 
-    ## Asymptotic Critical Values (10% 5% 1%)
-    ## Joint Statistic:          1.28 1.47 1.88
-    ## Individual Statistic:     0.35 0.47 0.75
-    ## 
-    ## Sign Bias Test
-    ## ------------------------------------
-    ##                    t-value   prob sig
-    ## Sign Bias           1.1056 0.2692    
-    ## Negative Sign Bias  0.5436 0.5868    
-    ## Positive Sign Bias  0.8752 0.3817    
-    ## Joint Effect        4.2942 0.2314    
-    ## 
-    ## 
-    ## Adjusted Pearson Goodness-of-Fit Test:
-    ## ------------------------------------
-    ##   group statistic p-value(g-1)
-    ## 1    20     30.93      0.04109
-    ## 2    30     34.54      0.21992
-    ## 3    40     45.44      0.22137
-    ## 4    50     57.01      0.20186
-    ## 
-    ## 
-    ## Elapsed time : 0.4410582
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+</th>
+
+<th style="text-align:right;">
+
+Estimate
+
+</th>
+
+<th style="text-align:right;">
+
+Std. Error
+
+</th>
+
+<th style="text-align:right;">
+
+t value
+
+</th>
+
+<th style="text-align:right;">
+
+Pr(\>|t|)
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+mu
+
+</td>
+
+<td style="text-align:right;">
+
+0.0004474
+
+</td>
+
+<td style="text-align:right;">
+
+0.0002752
+
+</td>
+
+<td style="text-align:right;">
+
+1.6256283
+
+</td>
+
+<td style="text-align:right;">
+
+0.1040287
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+ar1
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.0171957
+
+</td>
+
+<td style="text-align:right;">
+
+0.0343049
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.5012615
+
+</td>
+
+<td style="text-align:right;">
+
+0.6161871
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+omega
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000034
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000027
+
+</td>
+
+<td style="text-align:right;">
+
+1.2378715
+
+</td>
+
+<td style="text-align:right;">
+
+0.2157637
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+alpha1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1174970
+
+</td>
+
+<td style="text-align:right;">
+
+0.0215932
+
+</td>
+
+<td style="text-align:right;">
+
+5.4414018
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000001
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+beta1
+
+</td>
+
+<td style="text-align:right;">
+
+0.8571821
+
+</td>
+
+<td style="text-align:right;">
+
+0.0274395
+
+</td>
+
+<td style="text-align:right;">
+
+31.2390053
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+``` r
+kable(garchfit1@fit$robust.matcoef, format = "html")
+```
+
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+</th>
+
+<th style="text-align:right;">
+
+Estimate
+
+</th>
+
+<th style="text-align:right;">
+
+Std. Error
+
+</th>
+
+<th style="text-align:right;">
+
+t value
+
+</th>
+
+<th style="text-align:right;">
+
+Pr(\>|t|)
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+mu
+
+</td>
+
+<td style="text-align:right;">
+
+0.0004474
+
+</td>
+
+<td style="text-align:right;">
+
+0.0002731
+
+</td>
+
+<td style="text-align:right;">
+
+1.6382839
+
+</td>
+
+<td style="text-align:right;">
+
+0.1013625
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+ar1
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.0171957
+
+</td>
+
+<td style="text-align:right;">
+
+0.0330750
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.5199013
+
+</td>
+
+<td style="text-align:right;">
+
+0.6031324
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+omega
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000034
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000111
+
+</td>
+
+<td style="text-align:right;">
+
+0.3042190
+
+</td>
+
+<td style="text-align:right;">
+
+0.7609611
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+alpha1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1174970
+
+</td>
+
+<td style="text-align:right;">
+
+0.0348355
+
+</td>
+
+<td style="text-align:right;">
+
+3.3729088
+
+</td>
+
+<td style="text-align:right;">
+
+0.0007438
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+beta1
+
+</td>
+
+<td style="text-align:right;">
+
+0.8571821
+
+</td>
+
+<td style="text-align:right;">
+
+0.0811577
+
+</td>
+
+<td style="text-align:right;">
+
+10.5619346
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+## Fitting with external reg
 
 ``` r
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
@@ -347,107 +609,552 @@ garchx <- ugarchspec(variance.model = list(model = c("sGARCH",
 
 garchfitx = ugarchfit(spec = garchx, data = fit)
 
-garchfitx
+kable(garchfitx@fit$matcoef, format = "html")
 ```
 
-    ## 
-    ## *---------------------------------*
-    ## *          GARCH Model Fit        *
-    ## *---------------------------------*
-    ## 
-    ## Conditional Variance Dynamics    
-    ## -----------------------------------
-    ## GARCH Model  : sGARCH(1,1)
-    ## Mean Model   : ARFIMA(1,0,0)
-    ## Distribution : norm 
-    ## 
-    ## Optimal Parameters
-    ## ------------------------------------
-    ##         Estimate  Std. Error  t value Pr(>|t|)
-    ## mu     -0.000528    0.000314 -1.68227 0.092517
-    ## ar1    -0.019763    0.035429 -0.55781 0.576973
-    ## omega   0.000000    0.000003  0.00000 1.000000
-    ## alpha1  0.129395    0.035706  3.62391 0.000290
-    ## beta1   0.317872    0.097413  3.26315 0.001102
-    ## vxreg1  0.002483    0.000508  4.88858 0.000001
-    ## 
-    ## Robust Standard Errors:
-    ##         Estimate  Std. Error  t value Pr(>|t|)
-    ## mu     -0.000528    0.000775 -0.68106  0.49584
-    ## ar1    -0.019763    0.034241 -0.57717  0.56383
-    ## omega   0.000000    0.000004  0.00000  1.00000
-    ## alpha1  0.129395    0.130018  0.99521  0.31964
-    ## beta1   0.317872    0.463322  0.68607  0.49267
-    ## vxreg1  0.002483    0.002402  1.03357  0.30134
-    ## 
-    ## LogLikelihood : 3213.308 
-    ## 
-    ## Information Criteria
-    ## ------------------------------------
-    ##                     
-    ## Akaike       -6.4210
-    ## Bayes        -6.3916
-    ## Shibata      -6.4211
-    ## Hannan-Quinn -6.4098
-    ## 
-    ## Weighted Ljung-Box Test on Standardized Residuals
-    ## ------------------------------------
-    ##                         statistic p-value
-    ## Lag[1]                    0.02323  0.8789
-    ## Lag[2*(p+q)+(p+q)-1][2]   0.05945  1.0000
-    ## Lag[4*(p+q)+(p+q)-1][5]   2.80823  0.4811
-    ## d.o.f=1
-    ## H0 : No serial correlation
-    ## 
-    ## Weighted Ljung-Box Test on Standardized Squared Residuals
-    ## ------------------------------------
-    ##                         statistic   p-value
-    ## Lag[1]                      1.466 2.259e-01
-    ## Lag[2*(p+q)+(p+q)-1][5]    35.735 7.552e-10
-    ## Lag[4*(p+q)+(p+q)-1][9]    54.245 6.184e-14
-    ## d.o.f=2
-    ## 
-    ## Weighted ARCH LM Tests
-    ## ------------------------------------
-    ##             Statistic Shape Scale   P-Value
-    ## ARCH Lag[3]     14.15 0.500 2.000 1.689e-04
-    ## ARCH Lag[5]     38.86 1.440 1.667 3.439e-10
-    ## ARCH Lag[7]     45.41 2.315 1.543 1.251e-11
-    ## 
-    ## Nyblom stability test
-    ## ------------------------------------
-    ## Joint Statistic:  57.2025
-    ## Individual Statistics:               
-    ## mu      0.10308
-    ## ar1     0.06806
-    ## omega  12.73037
-    ## alpha1  1.29423
-    ## beta1   1.18417
-    ## vxreg1  1.37848
-    ## 
-    ## Asymptotic Critical Values (10% 5% 1%)
-    ## Joint Statistic:          1.49 1.68 2.12
-    ## Individual Statistic:     0.35 0.47 0.75
-    ## 
-    ## Sign Bias Test
-    ## ------------------------------------
-    ##                    t-value    prob sig
-    ## Sign Bias           2.0580 0.03985  **
-    ## Negative Sign Bias  0.4060 0.68484    
-    ## Positive Sign Bias  0.5101 0.61012    
-    ## Joint Effect        5.2681 0.15318    
-    ## 
-    ## 
-    ## Adjusted Pearson Goodness-of-Fit Test:
-    ## ------------------------------------
-    ##   group statistic p-value(g-1)
-    ## 1    20     40.50     0.002812
-    ## 2    30     47.40     0.016962
-    ## 3    40     59.30     0.019611
-    ## 4    50     82.23     0.002063
-    ## 
-    ## 
-    ## Elapsed time : 0.461978
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+</th>
+
+<th style="text-align:right;">
+
+Estimate
+
+</th>
+
+<th style="text-align:right;">
+
+Std. Error
+
+</th>
+
+<th style="text-align:right;">
+
+t value
+
+</th>
+
+<th style="text-align:right;">
+
+Pr(\>|t|)
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+mu
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.0005277
+
+</td>
+
+<td style="text-align:right;">
+
+0.0003137
+
+</td>
+
+<td style="text-align:right;">
+
+\-1.6822670
+
+</td>
+
+<td style="text-align:right;">
+
+0.0925171
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+ar1
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.0197627
+
+</td>
+
+<td style="text-align:right;">
+
+0.0354290
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.5578117
+
+</td>
+
+<td style="text-align:right;">
+
+0.5769730
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+omega
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000027
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+<td style="text-align:right;">
+
+1.0000000
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+alpha1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1293955
+
+</td>
+
+<td style="text-align:right;">
+
+0.0357061
+
+</td>
+
+<td style="text-align:right;">
+
+3.6239067
+
+</td>
+
+<td style="text-align:right;">
+
+0.0002902
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+beta1
+
+</td>
+
+<td style="text-align:right;">
+
+0.3178723
+
+</td>
+
+<td style="text-align:right;">
+
+0.0974126
+
+</td>
+
+<td style="text-align:right;">
+
+3.2631541
+
+</td>
+
+<td style="text-align:right;">
+
+0.0011018
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+vxreg1
+
+</td>
+
+<td style="text-align:right;">
+
+0.0024830
+
+</td>
+
+<td style="text-align:right;">
+
+0.0005079
+
+</td>
+
+<td style="text-align:right;">
+
+4.8885846
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000010
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+``` r
+kable(garchfitx@fit$robust.matcoef, format = "html")
+```
+
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+</th>
+
+<th style="text-align:right;">
+
+Estimate
+
+</th>
+
+<th style="text-align:right;">
+
+Std. Error
+
+</th>
+
+<th style="text-align:right;">
+
+t value
+
+</th>
+
+<th style="text-align:right;">
+
+Pr(\>|t|)
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+mu
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.0005277
+
+</td>
+
+<td style="text-align:right;">
+
+0.0007748
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.6810565
+
+</td>
+
+<td style="text-align:right;">
+
+0.4958357
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+ar1
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.0197627
+
+</td>
+
+<td style="text-align:right;">
+
+0.0342408
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.5771686
+
+</td>
+
+<td style="text-align:right;">
+
+0.5638256
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+omega
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000039
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+<td style="text-align:right;">
+
+1.0000000
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+alpha1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1293955
+
+</td>
+
+<td style="text-align:right;">
+
+0.1300185
+
+</td>
+
+<td style="text-align:right;">
+
+0.9952082
+
+</td>
+
+<td style="text-align:right;">
+
+0.3196350
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+beta1
+
+</td>
+
+<td style="text-align:right;">
+
+0.3178723
+
+</td>
+
+<td style="text-align:right;">
+
+0.4633221
+
+</td>
+
+<td style="text-align:right;">
+
+0.6860720
+
+</td>
+
+<td style="text-align:right;">
+
+0.4926677
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+vxreg1
+
+</td>
+
+<td style="text-align:right;">
+
+0.0024830
+
+</td>
+
+<td style="text-align:right;">
+
+0.0024024
+
+</td>
+
+<td style="text-align:right;">
+
+1.0335708
+
+</td>
+
+<td style="text-align:right;">
+
+0.3013368
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+``` r
+# forecast
+
+garchxfor <- ugarchforecast(garchfitx, data = NULL, n.ahead = 10, n.roll
+                        = 0, out.sample = 100, external.forecasts = list(mregfor=NULL, vregfor=exreg))
+
+garchfor <- ugarchforecast(garchfit1, n.ahead = 10)
+
+
+# forecast sigmas:
+f1 <-as.data.frame(sigma(garchfor))
+
+f2 <-as.data.frame(sigma(garchxfor))
+
+series1 <- fitted(garchfor)
+
+series2 <- fitted(garchxfor)
+
+sigmaf <- cbind(f1, f2)
+
+fitf <-cbind(series1, series2)
+
+vol <- sigmaf^2
+
+colnames(vol) <- c("GARCH", "GARCH-X")
+
+kable(vol)
+```
+
+|      |     GARCH |  GARCH-X |
+| :--- | --------: | -------: |
+| T+1  | 0.0001043 | 8.13e-05 |
+| T+2  | 0.0001050 | 8.21e-05 |
+| T+3  | 0.0001058 | 7.16e-05 |
+| T+4  | 0.0001065 | 8.07e-05 |
+| T+5  | 0.0001072 | 6.69e-05 |
+| T+6  | 0.0001078 | 7.27e-05 |
+| T+7  | 0.0001085 | 7.04e-05 |
+| T+8  | 0.0001091 | 8.33e-05 |
+| T+9  | 0.0001098 | 9.72e-05 |
+| T+10 | 0.0001104 | 6.99e-05 |
+
+## compare forecasts
 
 ## Veiw the two conditional variance plots
 
@@ -468,7 +1175,7 @@ labs(title = "Comparison: Returns Sigma vs Sigma from Garch-x",
     x = "", y = "Comparison of estimated volatility")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 ``` r
 # now for the garch
@@ -487,7 +1194,7 @@ labs(title = "Comparison: Returns Sigma vs Sigma from Garch",
     x = "", y = "Comparison of estimated volatility")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
 
 ``` r
 plot(garchfitx, which = 'all')
@@ -496,7 +1203,7 @@ plot(garchfitx, which = 'all')
     ## 
     ## please wait...calculating quantiles...
 
-![](README_files/figure-gfm/unnamed-chunk-9-3.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-7-3.png)<!-- -->
 
 ``` r
 plot(garchfit1, which = 'all')
@@ -505,58 +1212,53 @@ plot(garchfit1, which = 'all')
     ## 
     ## please wait...calculating quantiles...
 
-![](README_files/figure-gfm/unnamed-chunk-9-4.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-7-4.png)<!-- -->
 
 ``` r
 # testing the fit 
 
-infocriteria(garchfit1)
+fit.ic <- cbind(infocriteria(garchfit1),infocriteria(garchfitx)) 
+
+colnames(fit.ic) <-c("GARCH","GARCH-X")
+
+kable(fit.ic)
 ```
 
-    ##                       
-    ## Akaike       -6.373251
-    ## Bayes        -6.348693
-    ## Shibata      -6.373301
-    ## Hannan-Quinn -6.363917
-
-``` r
-infocriteria(garchfitx)
-```
-
-    ##                       
-    ## Akaike       -6.421037
-    ## Bayes        -6.391567
-    ## Shibata      -6.421109
-    ## Hannan-Quinn -6.409836
+|              |      GARCH |    GARCH-X |
+| :----------- | ---------: | ---------: |
+| Akaike       | \-6.373251 | \-6.421037 |
+| Bayes        | \-6.348693 | \-6.391567 |
+| Shibata      | \-6.373301 | \-6.421109 |
+| Hannan-Quinn | \-6.363917 | \-6.409836 |
 
 ## forecast vol with the two models
 
 ``` r
-garchfx <- ugarchforecast(garchfitx, n.ahead = 30)
-garchf <- ugarchforecast(garchfit1, n.ahead = 30)
+garchfx <- ugarchforecast(garchfitx, n.ahead = 10)
+garchf <- ugarchforecast(garchfit1, n.ahead = 10)
 
 plot(garchfx, which = 1)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 ``` r
 plot(garchf, which = 1)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->
 
 ``` r
 plot(garchfx, which = 3)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-10-3.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-8-3.png)<!-- -->
 
 ``` r
 plot(garchf, which = 3)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-10-4.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-8-4.png)<!-- -->
 
 ``` r
 # rolling forecast
@@ -601,7 +1303,7 @@ show(roll)
     ## 2020-07-30 4e-04 0.0092    0     0          0  -0.0175
     ## 2020-07-31 5e-04 0.0107    0     0          0  -0.0050
     ## 
-    ## Elapsed: 17.37014 secs
+    ## Elapsed: 15.62256 secs
 
 ``` r
 report(roll, type = "fpm")
@@ -659,7 +1361,7 @@ show(rollx)
     ## 2020-07-30 -6e-04 0.0096    0     0          0  -0.0175
     ## 2020-07-31 -4e-04 0.0114    0     0          0  -0.0050
     ## 
-    ## Elapsed: 3.176265 secs
+    ## Elapsed: 2.585242 secs
 
 ``` r
 report(rollx, type = "fpm")
@@ -696,26 +1398,22 @@ report(roll, type = "fpm")
 ## Run an AR(1) on
 
 ``` r
-ARTP40 <- arima(TP40, order = c(1, 0, 0))
-
-ARTP40
+arima(TP40, order = c(1, 0, 1))
 ```
 
     ## 
     ## Call:
-    ## arima(x = TP40, order = c(1, 0, 0))
+    ## arima(x = TP40, order = c(1, 0, 1))
     ## 
     ## Coefficients:
-    ##          ar1  intercept
-    ##       0.0164      6e-04
-    ## s.e.  0.0147      2e-04
+    ##          ar1     ma1  intercept
+    ##       0.0079  0.0088      6e-04
+    ## s.e.  0.8269  0.8424      2e-04
     ## 
-    ## sigma^2 estimated as 0.0001303:  log likelihood = 14179.27,  aic = -28352.53
+    ## sigma^2 estimated as 0.0001303:  log likelihood = 14179.28,  aic = -28350.56
 
 ``` r
-ARexreg <- arima(exreg, order = c(1, 0, 0))
-
-ARexreg
+arima(exreg, order = c(1, 0, 0))
 ```
 
     ## 
@@ -728,3 +1426,1062 @@ ARexreg
     ## s.e.  0.0272     0.0007
     ## 
     ## sigma^2 estimated as 0.0001357:  log likelihood = 3030.5,  aic = -6054.99
+
+## Truncate the sample in daily data
+
+``` r
+RvolJ400 <- Ivol %>% filter(Idx == "J400", Type == "W_Avg_RV") %>% tbl_df() %>% 
+  mutate(Qlow = quantile(Value, 0.15), Qhigh = quantile(Value, 0.85)) %>% 
+  mutate(HighVol = ifelse(Value > Qhigh, "High", ifelse(Value < Qlow, "Low", "Neutral")))
+```
+
+    ## Warning: `tbl_df()` is deprecated as of dplyr 1.0.0.
+    ## Please use `tibble::as_tibble()` instead.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_warnings()` to see where this warning was generated.
+
+``` r
+# make nas zero, temp solution
+
+ID_dispJ400 <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>% na.omit() %>% 
+  mutate(Qlow = quantile(ID_Dispersion_W_J400, 0.15), Qhigh = quantile(ID_Dispersion_W_J400, 0.85)) %>% 
+  mutate(HighVol = ifelse(ID_Dispersion_W_J400 > Qhigh, "High", ifelse(ID_Dispersion_W_J400 < Qlow, "Low", "Neutral")))
+
+# confusion matrix/contingency table
+
+ID_dispJ400 %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
+  left_join(RvolJ400, by = "date") %>% rename(RealV_vol = HighVol) %>% select(Intraday_vol, RealV_vol) %>% 
+  mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
+         RealV_vol = factor(RealV_vol, levels = c("High","Neutral", "Low"))) %>% table() %>% kable()
+```
+
+|         | High | Neutral | Low |
+| :------ | ---: | ------: | --: |
+| High    |   81 |      68 |   0 |
+| Neutral |   71 |     532 |  93 |
+| Low     |    1 |      87 |  61 |
+
+``` r
+#install.packages("caret")
+#library(caret)
+```
+
+## truncate the sample in weekly format
+
+``` r
+# Truncate the weekly sample
+
+RvolJ400w <- Ivol %>% filter(Idx == "J400", Type == "W_Avg_RV") %>% tbl_xts() %>% apply.weekly(mean) %>% 
+  xts_tbl() %>% mutate(Qlow = quantile(Value, 0.15), Qhigh = quantile(Value, 0.85)) %>% 
+    mutate(HighVol = ifelse(Value > Qhigh, "High", ifelse(Value < Qlow, "Low", "Neutral"))) 
+
+# remove the nas from the sample
+
+ID_dispJ400w <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>% na.omit() %>% tbl_xts() %>% apply.weekly(mean) %>%
+  xts_tbl() %>% mutate(Qlow = quantile(ID_Dispersion_W_J400, 0.15), Qhigh = quantile(ID_Dispersion_W_J400, 0.85)) %>% 
+  mutate(HighVol = ifelse(ID_Dispersion_W_J400 > Qhigh, "High", ifelse(ID_Dispersion_W_J400 < Qlow, "Low", "Neutral")))
+
+# confusion matrix of the different periods of volatility
+
+ID_dispJ400w %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
+  left_join(RvolJ400w, by = "date") %>% rename(RealV_vol = HighVol) %>% select(Intraday_vol, RealV_vol) %>% 
+  mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
+         RealV_vol = factor(RealV_vol, levels = c("High","Neutral", "Low"))) %>% table() %>% kable()
+```
+
+|         | High | Neutral | Low |
+| :------ | ---: | ------: | --: |
+| High    |   24 |       8 |   0 |
+| Neutral |    8 |     124 |  14 |
+| Low     |    1 |      12 |  19 |
+
+## The mean of the different dispersion vol regimes
+
+``` r
+ID_dispJ400 %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
+  left_join(RvolJ400, by = "date") %>% mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
+         HighVol = factor(HighVol, levels = c("High","Neutral", "Low"))) %>% with(tapply(Value, Intraday_vol, mean))
+```
+
+    ##       High    Neutral        Low 
+    ## 0.02580403 0.01774428 0.01468713
+
+## Lets try and fit weekly data to garch
+
+``` r
+# The two series for the model
+
+comb2 <- comb %>% xts_tbl() %>% select(date, SimpleRet) %>% tbl_xts() %>% apply.weekly(mean)
+
+combmain <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>% tbl_xts() %>% apply.weekly(mean) %>% 
+  xts_tbl() %>% left_join(xts_tbl(comb2), by = "date") %>% na.omit() %>% tbl_xts() 
+
+# check na's
+colSums(is.na(combmain))
+```
+
+    ## ID_Dispersion_W_J400            SimpleRet 
+    ##                    0                    0
+
+``` r
+fitw <- combmain[,2]
+exregw <- combmain[,1]
+
+# model weekly vol with ext reg
+
+garchweekly <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = NULL), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution.model = "norm")
+
+garchx2 <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = exregw), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution.model = "norm")
+
+garchfit2 <- ugarchfit(spec = garchweekly, data = fitw)
+
+garchfitx2 <- ugarchfit(spec = garchx2, data = fitw)
+```
+
+## Weekly data normal
+
+``` r
+kable(garchfit2@fit$matcoef, format = "html")
+```
+
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+</th>
+
+<th style="text-align:right;">
+
+Estimate
+
+</th>
+
+<th style="text-align:right;">
+
+Std. Error
+
+</th>
+
+<th style="text-align:right;">
+
+t value
+
+</th>
+
+<th style="text-align:right;">
+
+Pr(\>|t|)
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+mu
+
+</td>
+
+<td style="text-align:right;">
+
+0.0003065
+
+</td>
+
+<td style="text-align:right;">
+
+0.0002915
+
+</td>
+
+<td style="text-align:right;">
+
+1.0516322
+
+</td>
+
+<td style="text-align:right;">
+
+0.2929683
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+ar1
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.0313997
+
+</td>
+
+<td style="text-align:right;">
+
+0.0802030
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.3915035
+
+</td>
+
+<td style="text-align:right;">
+
+0.6954251
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+omega
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000039
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000006
+
+</td>
+
+<td style="text-align:right;">
+
+6.3887405
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+alpha1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1972441
+
+</td>
+
+<td style="text-align:right;">
+
+0.0453789
+
+</td>
+
+<td style="text-align:right;">
+
+4.3466063
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000138
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+beta1
+
+</td>
+
+<td style="text-align:right;">
+
+0.6572609
+
+</td>
+
+<td style="text-align:right;">
+
+0.0501095
+
+</td>
+
+<td style="text-align:right;">
+
+13.1164824
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+``` r
+kable(garchfit2@fit$robust.matcoef, format = "html")
+```
+
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+</th>
+
+<th style="text-align:right;">
+
+Estimate
+
+</th>
+
+<th style="text-align:right;">
+
+Std. Error
+
+</th>
+
+<th style="text-align:right;">
+
+t value
+
+</th>
+
+<th style="text-align:right;">
+
+Pr(\>|t|)
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+mu
+
+</td>
+
+<td style="text-align:right;">
+
+0.0003065
+
+</td>
+
+<td style="text-align:right;">
+
+0.0002757
+
+</td>
+
+<td style="text-align:right;">
+
+1.1119082
+
+</td>
+
+<td style="text-align:right;">
+
+0.2661776
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+ar1
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.0313997
+
+</td>
+
+<td style="text-align:right;">
+
+0.0761691
+
+</td>
+
+<td style="text-align:right;">
+
+\-0.4122374
+
+</td>
+
+<td style="text-align:right;">
+
+0.6801654
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+omega
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000039
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000006
+
+</td>
+
+<td style="text-align:right;">
+
+7.0043777
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+alpha1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1972441
+
+</td>
+
+<td style="text-align:right;">
+
+0.0484544
+
+</td>
+
+<td style="text-align:right;">
+
+4.0707131
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000469
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+beta1
+
+</td>
+
+<td style="text-align:right;">
+
+0.6572609
+
+</td>
+
+<td style="text-align:right;">
+
+0.0608476
+
+</td>
+
+<td style="text-align:right;">
+
+10.8017490
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+## Weekly data ext reg
+
+``` r
+kable(garchfitx2@fit$matcoef, format = "html")
+```
+
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+</th>
+
+<th style="text-align:right;">
+
+Estimate
+
+</th>
+
+<th style="text-align:right;">
+
+Std. Error
+
+</th>
+
+<th style="text-align:right;">
+
+t value
+
+</th>
+
+<th style="text-align:right;">
+
+Pr(\>|t|)
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+mu
+
+</td>
+
+<td style="text-align:right;">
+
+0.0001133
+
+</td>
+
+<td style="text-align:right;">
+
+0.0003289
+
+</td>
+
+<td style="text-align:right;">
+
+0.3445778
+
+</td>
+
+<td style="text-align:right;">
+
+0.7304118
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+ar1
+
+</td>
+
+<td style="text-align:right;">
+
+0.0124450
+
+</td>
+
+<td style="text-align:right;">
+
+0.0841746
+
+</td>
+
+<td style="text-align:right;">
+
+0.1478478
+
+</td>
+
+<td style="text-align:right;">
+
+0.8824629
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+omega
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000029
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000003
+
+</td>
+
+<td style="text-align:right;">
+
+0.9999997
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+alpha1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1757285
+
+</td>
+
+<td style="text-align:right;">
+
+0.1197088
+
+</td>
+
+<td style="text-align:right;">
+
+1.4679670
+
+</td>
+
+<td style="text-align:right;">
+
+0.1421132
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+beta1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1611201
+
+</td>
+
+<td style="text-align:right;">
+
+0.1733169
+
+</td>
+
+<td style="text-align:right;">
+
+0.9296270
+
+</td>
+
+<td style="text-align:right;">
+
+0.3525642
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+vxreg1
+
+</td>
+
+<td style="text-align:right;">
+
+0.0006314
+
+</td>
+
+<td style="text-align:right;">
+
+0.0002152
+
+</td>
+
+<td style="text-align:right;">
+
+2.9338546
+
+</td>
+
+<td style="text-align:right;">
+
+0.0033478
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+``` r
+kable(garchfitx2@fit$robust.matcoef, format = "html")
+```
+
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+</th>
+
+<th style="text-align:right;">
+
+Estimate
+
+</th>
+
+<th style="text-align:right;">
+
+Std. Error
+
+</th>
+
+<th style="text-align:right;">
+
+t value
+
+</th>
+
+<th style="text-align:right;">
+
+Pr(\>|t|)
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+mu
+
+</td>
+
+<td style="text-align:right;">
+
+0.0001133
+
+</td>
+
+<td style="text-align:right;">
+
+0.0004095
+
+</td>
+
+<td style="text-align:right;">
+
+0.2768021
+
+</td>
+
+<td style="text-align:right;">
+
+0.7819320
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+ar1
+
+</td>
+
+<td style="text-align:right;">
+
+0.0124450
+
+</td>
+
+<td style="text-align:right;">
+
+0.0780710
+
+</td>
+
+<td style="text-align:right;">
+
+0.1594066
+
+</td>
+
+<td style="text-align:right;">
+
+0.8733486
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+omega
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000000
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000030
+
+</td>
+
+<td style="text-align:right;">
+
+0.0000003
+
+</td>
+
+<td style="text-align:right;">
+
+0.9999997
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+alpha1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1757285
+
+</td>
+
+<td style="text-align:right;">
+
+0.2318230
+
+</td>
+
+<td style="text-align:right;">
+
+0.7580289
+
+</td>
+
+<td style="text-align:right;">
+
+0.4484337
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+beta1
+
+</td>
+
+<td style="text-align:right;">
+
+0.1611201
+
+</td>
+
+<td style="text-align:right;">
+
+0.3344591
+
+</td>
+
+<td style="text-align:right;">
+
+0.4817333
+
+</td>
+
+<td style="text-align:right;">
+
+0.6299954
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+vxreg1
+
+</td>
+
+<td style="text-align:right;">
+
+0.0006314
+
+</td>
+
+<td style="text-align:right;">
+
+0.0004466
+
+</td>
+
+<td style="text-align:right;">
+
+1.4139640
+
+</td>
+
+<td style="text-align:right;">
+
+0.1573725
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
