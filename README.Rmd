@@ -18,22 +18,21 @@ load_pkg(c("tidyverse", "devtools", "rugarch", "forecast", "tbl2xts",
     "lubridate", "PerformanceAnalytics", "ggthemes"))
 library(tidyverse)
 library(knitr)
+
 ```
 
+
+# Dispersion data 
 
 ```{r}
 
 # Intraday dispersion last 4 years:
-ID_Disp <- read_rds("data/ID_Disp.rds") %>% filter(date >= as.Date("2016-07-29") & date <= as.Date("2020-07-31"))
-
-ID_dispw <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>% tbl_xts() %>% apply.weekly(mean)
+ID_Disp <- read_rds("data/ID_Disp.rds") %>% filter(date >= as.Date("2016-07-29") & date <= as.Date("2020-05-29"))
 
 ID_Disp %>% 
   ggplot() + 
   geom_line(aes(date, ID_Dispersion_W_J400)) + 
   geom_line(aes(date, ID_Dispersion_W_J200), color = "red")
-
-
   
 # Intraday weighted average realized volatility:
 Ivol <- bind_rows(read_rds("data/J200_IVol.rds") %>% select(date, Avg_RV, W_Avg_RV = W_Avg_RV_J200) %>% mutate(Idx = "J200") %>% gather(Type, Value, -date, -Idx), 
@@ -55,8 +54,6 @@ M_Dispersion <-
 
 ## Importing index returns data 
 
-The returns data used to construct the 
-
 ```{r}
 library(tbl2xts)
 
@@ -70,18 +67,72 @@ library(tbl2xts)
 
 # saveRDS(TP40, file = "data/TP40.rds")
 
+TP40n <- read_rds("data/Top40_new.rds")
 TP40 <- read_rds("data/TP40.rds")
+```
 
+## Calculate returns with new data 15/01/21
+
+```{r}
+TP40n <- read_rds("data/Top40_new.rds")
+rts <- TP40n %>% select(date, Tickers, Return) %>% spread(Tickers, Return) %>% tbl_xts()
+wts <- TP40n %>% select(date, Tickers, J200_W_Adj) %>% spread(Tickers, J200_W_Adj) %>% tbl_xts()
+
+wts[is.na(wts)] <- 0
+rts[is.na(rts)] <- 0
+
+TP40rts <- Safe_Return.portfolio(R = rts, weights = wts, 
+    lag_weights = T) %>% xts_tbl() %>% rename(Returns = portfolio.returns) %>% tbl_xts()
+
+TP40rts_w <- TP40rts %>% apply.weekly(mean)
+
+
+# visualize the difference between the two returns series 
+
+plot1 <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>% mutate(Idx = "Intraday Dispersion") %>% 
+  gather(Type, Value, -date, -Idx)
+
+plot2 <- ID_Disp %>% left_join(Ivol, by = "date") %>% filter(Idx == "J200", Type == "W_Avg_RV") %>% 
+  na.omit() %>% select(date, ID_Dispersion_W_J200, Value) %>% mutate(Idx = "Realized Volatility") %>% 
+  select(date, Value, Idx) %>% gather(Type, Value, -date, -Idx)
+
+plot <- bind_rows(plot1, plot2) %>% rename(Date = date)
+
+
+plotf <- plot %>% 
+  ggplot() + 
+  geom_line(aes(Date, Value, color = Idx)) + 
+  labs(title = "Weighted Avg Realized Volatility", y = "", x = "") + theme_bw() +
+  theme(legend.position=c(0.4, 0.87), legend.direction = "vertical", legend.title = element_blank(),
+        legend.background = element_rect(fill="white", 
+                                  size=0.5, linetype="solid", colour = "black"), legend.text = element_text(size=8)) + ggtitle("")
+
+# save plot for tex 
+
+saveRDS(plotf, file = "plotf")
+  
+
+xts_tbl(TP40rts) %>% left_join(xts_tbl(TP40), by = "date") %>% na.omit() %>%
+  ggplot() + 
+  geom_line(aes(date, Returns), color = "red") +
+  geom_line(aes(date, SimpleRet))
+
+
+```
+
+# Plotting the returns data 
+
+```{r}
 # plotting the data 
 
-Plotdata <- cbind(TP40, TP40^2, abs(TP40))
+Plotdata <- cbind(TP40rts, TP40rts^2, abs(TP40rts))
 colnames(Plotdata) <- c("Returns", "Returns_Sqd", "Returns_Abs")
 
 Plotdata <- Plotdata %>% xts_tbl() %>% gather(ReturnType, Returns,-date) %>%
   filter(date >= as.Date("2016-07-29") & date <= as.Date("2020-07-31"))
 
 ggplot(Plotdata) + geom_line(aes(x = date, y = Returns, colour = ReturnType, 
-    alpha = 0.5)) + ggtitle("Return Type Persistence: TOP40TR Index") + 
+    alpha = 0.5)) + ggtitle("Return Type Persistence: J200 Index") + 
     facet_wrap(~ReturnType, nrow = 3, ncol = 1, scales = "free") + 
     guides(alpha = FALSE, colour = FALSE) + theme_bw()
 
@@ -91,21 +142,21 @@ ggplot(Plotdata) + geom_line(aes(x = date, y = Returns, colour = ReturnType,
 ## tests
 
 ```{r}
-forecast::Acf(TP40, main = "ACF: Equally Weighted Return")
+forecast::Acf(TP40rts, main = "ACF: Equally Weighted Return")
 
-forecast::Acf(TP40^2, main = "ACF: Squared Equally Weighted Return")
+forecast::Acf(TP40rts^2, main = "ACF: Squared Equally Weighted Return")
 
-forecast::Acf(abs(TP40), main = "ACF: Absolute Equally Weighted Return")
+forecast::Acf(abs(TP40rts), main = "ACF: Absolute Equally Weighted Return")
 ```
 
 These test prove that there is conditional heteroskedasticity in the data - there is volatility is clustering. 
 
 ```{r}
-Box.test(coredata(TP40^2), type = "Ljung-Box", lag = 12)
+Box.test(coredata(TP40rts^2), type = "Ljung-Box", lag = 12)
 ```
 
 
-# Estimating the GARCH
+# Estimating the daily GARCH model
 
 ## Simple GARCH on returns
 
@@ -114,15 +165,26 @@ library(rugarch)
 
 # combining the two datasets to make sure that they line up 
 
-comb <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>%  left_join(xts_tbl(TP40), by="date") %>%
-  tbl_xts() 
 
-# plot dispersion against returns
+comb <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>%  left_join(xts_tbl(TP40rts), by="date") %>% na.omit() %>%
+  tbl_xts()
 
-comb %>% xts_tbl() %>% 
+combplot <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>%  left_join(xts_tbl(TP40rts), by="date") %>%
+  tbl_xts() %>% na.omit %>% apply.weekly(mean) %>% xts_tbl() %>% 
+  rename("Return Dispersion" = ID_Dispersion_W_J200) %>% gather(Type, Value, -date)
+
+# Second plot for tex proj
+
+combplot <- combplot %>% 
   ggplot() + 
-  geom_line(aes(date, ID_Dispersion_W_J400), color = "steel blue") + 
-  geom_line(aes(date, SimpleRet), color = "red")
+  geom_line(aes(date, Value, color = Type)) + 
+  labs(title = "Weighted Avg Realized Volatility", y = "", x = "") + theme_bw() +
+  theme(legend.position=c(0.4, 0.87), legend.direction = "vertical", legend.title = element_blank(),
+        legend.background = element_rect(fill="white", 
+                                  size=0.5, linetype="solid", colour = "black"), legend.text = element_text(size=8)) + ggtitle("")
+
+saveRDS(combplot, file = "combplot")
+
 
 # remove the NAs - temporary solution 
 
@@ -130,7 +192,7 @@ comb[is.na(comb)] <- 0
 
 colSums(is.na(comb))
 
-fit <- comb[,2]
+fit <- comb[,2] %>% as.matrix() 
 
 
 # first fit the simple model to returns 
@@ -144,16 +206,15 @@ garchfit1 = ugarchfit(spec = garch1, data = fit)
 
 kable(garchfit1@fit$matcoef, format = "html")
 
-kable(garchfit1@fit$robust.matcoef, format = "html")
 
 ```
 
-## Fitting with external reg
+## Fitting with external regressor
 
 ```{r}
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
 
-exreg <- comb[,1]
+exreg <- comb[,1] %>% as.matrix()
 
 garchx <- ugarchspec(variance.model = list(model = c("sGARCH", 
     "gjrGARCH", "eGARCH", "fGARCH", "apARCH")[1], garchOrder = c(1, 
@@ -164,40 +225,13 @@ garchx <- ugarchspec(variance.model = list(model = c("sGARCH",
 
 garchfitx = ugarchfit(spec = garchx, data = fit)
 
-kable(garchfitx@fit$matcoef, format = "html")
-
 kable(garchfitx@fit$robust.matcoef, format = "html")
 
-# forecast
+# save the first two garch objects for the tex 
 
-garchxfor <- ugarchforecast(garchfitx, data = NULL, n.ahead = 10, n.roll
-                        = 0, out.sample = 100, external.forecasts = list(mregfor=NULL, vregfor=exreg))
-
-garchfor <- ugarchforecast(garchfit1, n.ahead = 10)
-
-
-# forecast sigmas:
-f1 <-as.data.frame(sigma(garchfor))
-
-f2 <-as.data.frame(sigma(garchxfor))
-
-series1 <- fitted(garchfor)
-
-series2 <- fitted(garchxfor)
-
-sigmaf <- cbind(f1, f2)
-
-fitf <-cbind(series1, series2)
-
-vol <- sigmaf^2
-
-colnames(vol) <- c("GARCH", "GARCH-X")
-
-kable(vol)
-
+saveRDS(garchfitx, file = "garchfitx")
+saveRDS(garchfit1, file = "garchfit1")
 ```
-
-## compare forecasts
 
 ## Veiw the two conditional variance plots
 
@@ -213,7 +247,7 @@ sigmax <- sigmax %>% mutate(date = as.Date(date))
 ggplot() + geom_line(data = Plotdata %>% filter(ReturnType == 
     "Returns_Sqd") %>% select(date, Returns) %>% unique %>% mutate(Returns = sqrt(Returns)), 
     aes(x = date, y = Returns)) + geom_line(data = sigmax, aes(x = date, 
-    y = sigma), color = "red", size = 1, alpha = 0.8) + theme_bw() + 
+    y = sigma), color = "red", size = 0.3, alpha = 0.8) + theme_bw() + 
     # scale_y_continuous(limits = c(0, 0.35)) +
 labs(title = "Comparison: Returns Sigma vs Sigma from Garch-x", 
     subtitle = "Note the smoothing effect of garch, as noise is controlled for.", 
@@ -241,6 +275,8 @@ plot(garchfitx, which = 'all')
 
 plot(garchfit1, which = 'all')
 
+persistence(garchfitx)
+
 
 # testing the fit 
 
@@ -253,41 +289,50 @@ kable(fit.ic)
 ```
 
 
-
-
-## forecast vol with the two models 
+## Forecasting with daily data
 
 ```{r}
-garchfx <- ugarchforecast(garchfitx, n.ahead = 10)
-garchf <- ugarchforecast(garchfit1, n.ahead = 10)
+# forecast
 
-plot(garchfx, which = 1)
-plot(garchf, which = 1)
+garchxfor <- ugarchforecast(garchfitx, data = fit, n.ahead = 10, n.roll = 0, out.sample = 100, external.forecasts = list(mregfor=NULL, vregfor=exreg))
 
-plot(garchfx, which = 3)
-plot(garchf, which = 3)
+garchfor <- ugarchforecast(garchfit1, n.ahead = 10)
 
-# rolling forecast
 
-cl <- makePSOCKcluster(10)
-# Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
-# normal distribution
+# forecast sigmas:
+f1 <-as.data.frame(sigma(garchfor))
 
-roll <- ugarchroll(garch1, fit, forecast.length = 500, refit.every = 50, 
-    refit.window = "moving", window.size = 1000, calculate.VaR = TRUE, 
+f2 <-as.data.frame(sigma(garchxfor))
+
+series1 <- fitted(garchfor)
+
+series2 <- fitted(garchxfor)
+
+sigmaf <- cbind(f1, f2)
+
+fitf <-cbind(series1, series2)
+
+vol <- sigmaf^2
+
+colnames(vol) <- c("GARCH", "GARCH-X")
+
+kable(vol)
+
+```
+
+
+## Testing the forecasting accuracy for the two models
+
+```{r}
+cl = makePSOCKcluster(10)
+
+
+roll = ugarchroll(garch1, fit, forecast.length = 500, refit.every = 25, 
+    refit.window = "moving", window.size = 600, calculate.VaR = TRUE, 
     VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
 
-# For this, only 1-step ahead can be done automatically.
-show(roll)
-
-
-report(roll, type = "fpm")
-
-# Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
-# normal distribution
-
-rollx <- ugarchroll(garchx, fit, forecast.length = 500, refit.every = 50, 
-    refit.window = "moving", window.size = 1000, calculate.VaR = TRUE, 
+rollx = ugarchroll(garchx, fit, forecast.length = 500, refit.every = 25, 
+    refit.window = "moving", window.size = 600, calculate.VaR = TRUE, 
     VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
 
 # For this, only 1-step ahead can be done automatically.
@@ -299,8 +344,6 @@ report(roll, type = "fpm")
 
 ```
 
-
-
 ## Run an AR(1) on 
 
 ```{r}
@@ -309,77 +352,16 @@ arima(TP40, order = c(1, 0, 1))
 arima(exreg, order = c(1, 0, 0))
 ```
 
-
-## Truncate the sample in daily data
-
-```{r}
-
-RvolJ400 <- Ivol %>% filter(Idx == "J400", Type == "W_Avg_RV") %>% tbl_df() %>% 
-  mutate(Qlow = quantile(Value, 0.15), Qhigh = quantile(Value, 0.85)) %>% 
-  mutate(HighVol = ifelse(Value > Qhigh, "High", ifelse(Value < Qlow, "Low", "Neutral")))
-
-# make nas zero, temp solution
-
-ID_dispJ400 <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>% na.omit() %>% 
-  mutate(Qlow = quantile(ID_Dispersion_W_J400, 0.15), Qhigh = quantile(ID_Dispersion_W_J400, 0.85)) %>% 
-  mutate(HighVol = ifelse(ID_Dispersion_W_J400 > Qhigh, "High", ifelse(ID_Dispersion_W_J400 < Qlow, "Low", "Neutral")))
-
-# confusion matrix/contingency table
-
-ID_dispJ400 %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
-  left_join(RvolJ400, by = "date") %>% rename(RealV_vol = HighVol) %>% select(Intraday_vol, RealV_vol) %>% 
-  mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
-         RealV_vol = factor(RealV_vol, levels = c("High","Neutral", "Low"))) %>% table() %>% kable()
-
-#install.packages("caret")
-#library(caret)
-
-```
-
-## truncate the sample in weekly format
-
-```{r}
-# Truncate the weekly sample
-
-RvolJ400w <- Ivol %>% filter(Idx == "J400", Type == "W_Avg_RV") %>% tbl_xts() %>% apply.weekly(mean) %>% 
-  xts_tbl() %>% mutate(Qlow = quantile(Value, 0.15), Qhigh = quantile(Value, 0.85)) %>% 
-    mutate(HighVol = ifelse(Value > Qhigh, "High", ifelse(Value < Qlow, "Low", "Neutral"))) 
-
-# remove the nas from the sample
-
-ID_dispJ400w <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>% na.omit() %>% tbl_xts() %>% apply.weekly(mean) %>%
-  xts_tbl() %>% mutate(Qlow = quantile(ID_Dispersion_W_J400, 0.15), Qhigh = quantile(ID_Dispersion_W_J400, 0.85)) %>% 
-  mutate(HighVol = ifelse(ID_Dispersion_W_J400 > Qhigh, "High", ifelse(ID_Dispersion_W_J400 < Qlow, "Low", "Neutral")))
-
-# confusion matrix of the different periods of volatility
-
-ID_dispJ400w %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
-  left_join(RvolJ400w, by = "date") %>% rename(RealV_vol = HighVol) %>% select(Intraday_vol, RealV_vol) %>% 
-  mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
-         RealV_vol = factor(RealV_vol, levels = c("High","Neutral", "Low"))) %>% table() %>% kable()
-
-```
-
-
-## The mean of the different dispersion vol regimes
-
-```{r}
-ID_dispJ400 %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
-  left_join(RvolJ400, by = "date") %>% mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
-         HighVol = factor(HighVol, levels = c("High","Neutral", "Low"))) %>% with(tapply(Value, Intraday_vol, mean))
-
-```
-
-## Lets try and fit weekly data to garch 
+# Esitmating weekly data on the GARCH model
 
 ```{r}
 
 # The two series for the model
 
-comb2 <- comb %>% xts_tbl() %>% select(date, SimpleRet) %>% tbl_xts() %>% apply.weekly(mean)
+comb2 <- comb %>% xts_tbl() %>% select(date, Returns) %>% tbl_xts() %>% apply.weekly(mean)
 
-combmain <- ID_Disp %>% select(date, ID_Dispersion_W_J400) %>% tbl_xts() %>% apply.weekly(mean) %>% 
-  xts_tbl() %>% left_join(xts_tbl(comb2), by = "date") %>% na.omit() %>% tbl_xts() 
+combmain <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>% tbl_xts() %>% apply.weekly(mean) %>% 
+  xts_tbl() %>% left_join(xts_tbl(comb2), by = "date") %>% na.omit() %>% tbl_xts()
 
 # check na's
 colSums(is.na(combmain))
@@ -402,21 +384,346 @@ garchfit2 <- ugarchfit(spec = garchweekly, data = fitw)
 
 garchfitx2 <- ugarchfit(spec = garchx2, data = fitw)
 
+# saving the output for the tex proj
+
+saveRDS(garchfit2, file = "garchfitw")
+saveRDS(garchfitx2, file = "garchfitwx")
+
 ```
 
-## Weekly data normal
+## Weekly data output
 ```{r}
 kable(garchfit2@fit$matcoef, format = "html")
-kable(garchfit2@fit$robust.matcoef, format = "html")
-```
-
-
-## Weekly data ext reg
-```{r}
 kable(garchfitx2@fit$matcoef, format = "html")
-kable(garchfitx2@fit$robust.matcoef, format = "html")
+
+LLH <- cbind(garchfit2@fit$LLH, garchfitx2@fit$LLH)
+colnames(LLH) <- c("GARCH", "GARCH-X")
+
+kable(LLH, format = "html")
+
+fit.ic2 <- cbind(infocriteria(garchfit2),infocriteria(garchfitx2)) 
+
+colnames(fit.ic2) <-c("GARCH","GARCH-X")
+
+kable(fit.ic2)
+
+# The two models show that the garch-x has a higher maximum likelhood and 
+# therefore a improved goodness of fit with the dispersion measure included 
 ```
 
+
+## Weekly forecast vol with the two models 
+
+```{r}
+garchfx_w <- ugarchforecast(garchfitx2, n.ahead = 10)
+garchf2 <- ugarchforecast(garchfit2, n.ahead = 10)
+
+plot(garchfx_w, which = 1)
+plot(garchf2, which = 1)
+
+plot(garchfx_w, which = 3)
+plot(garchf2, which = 3)
+
+# rolling forecast
+
+cl <- makePSOCKcluster(10)
+# Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
+# normal distribution
+
+roll2 <- ugarchroll(garchweekly, fitw, forecast.length = 100, refit.every = 50, 
+    refit.window = "moving", window.size = 120, calculate.VaR = TRUE, 
+    VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
+
+# For this, only 1-step ahead can be done automatically.
+show(roll2)
+
+
+report(roll2, type = "fpm")
+
+# Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
+# normal distribution
+
+rollxw = ugarchroll(garchx2, fitw, forecast.length = 100, refit.every = 15, 
+    refit.window = "moving", window.size = 150, calculate.VaR = TRUE, 
+    VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
+
+rollw = ugarchroll(garchweekly, fitw, forecast.length = 100, refit.every = 15, 
+    refit.window = "moving", window.size = 150, calculate.VaR = TRUE, 
+    VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
+
+
+report(rollxw, type = "fpm")
+
+report(rollw, type = "fpm")
+
+```
+
+# Estimating monthly data on the GARCH
+
+
+```{r}
+M_Dispersion <- 
+  read_rds("data/Dispersion/Monthly.rds")
+
+TP40rts_m <- TP40rts %>% apply.monthly(Return.cumulative) %>% xts_tbl()
+
+
+Monthly <- M_Dispersion %>% filter(Idx == "J200_W_Adj", Freq == "1_Month") %>% left_join(TP40rts_m, by = "date") %>% 
+  select(date, Dispersion_W, Returns) %>% na.omit() %>% tbl_xts() 
+
+plot.xts(Monthly$Returns)
+
+fitm <- Monthly[,2]
+exregm <- Monthly[,1]
+
+garchxm <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = exregm), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution.model = "norm")
+
+garchm <-  ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = NULL), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution.model = "norm")
+
+
+garchfitx4 <- ugarchfit(spec = garchxm, data = fitm)
+garchfit3 <- ugarchfit(spec = garchm, data = fitm)
+
+kable(garchfit3@fit$matcoef, format = "html")
+kable(garchfitx4@fit$matcoef, format = "html")
+
+LLH2 <- cbind(garchfit3@fit$LLH, garchfitx4@fit$LLH)
+colnames(LLH2) <- c("GARCH", "GARCH-X")
+
+kable(LLH2, format = "html")
+
+fit.ic3 <- cbind(infocriteria(garchfit3),infocriteria(garchfitx4)) 
+
+colnames(fit.ic3) <-c("GARCH","GARCH-X")
+
+kable(fit.ic3)
+
+# save the output for the tex proj
+
+saveRDS(garchfit3, file = "garchfitm")
+saveRDS(garchfitx4, file = "garchfitmx")
+```
+
+
+## fit the forecasts for monthly data
+
+```{r}
+garchfx_m <- ugarchforecast(garchfitx4, n.ahead = 10)
+garchfm <- ugarchforecast(garchfit3, n.ahead = 10)
+
+plot(garchfx_m, which = 1)
+plot(garchfm, which = 1)
+
+plot(garchfx_w, which = 3)
+plot(garchf2, which = 3)
+
+# rolling forecast
+
+cl <- makePSOCKcluster(10)
+# Thus the model spec is a ARIMA(1,1,0)-GJRGARCH(1,1), with
+# normal distribution
+
+rollxm = ugarchroll(garchxm, fitm, forecast.length = 50, refit.every = 5, 
+    refit.window = "moving", window.size = 100, calculate.VaR = TRUE, 
+    VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
+
+rollm = ugarchroll(garchm, fitm, forecast.length = 50, refit.every = 5, 
+    refit.window = "moving", window.size = 100, calculate.VaR = TRUE, 
+    VaR.alpha = c(0.01, 0.05), keep.coef = TRUE, cluster = cl)
+
+report(rollxm, type = "fpm")
+
+report(rollm, type = "fpm")
+
+```
+
+# Truncate the sample 
+
+## In daily format
+
+```{r}
+
+RvolJ200 <- Ivol %>% filter(Idx == "J200", Type == "W_Avg_RV") %>% 
+  mutate(Qlow = quantile(Value, 0.15), Qhigh = quantile(Value, 0.85)) %>% 
+  mutate(HighVol = ifelse(Value > Qhigh, "High", ifelse(Value < Qlow, "Low", "Neutral")))
+
+# make nas zero, temp solution
+
+ID_dispJ200 <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>% na.omit() %>% 
+  mutate(Qlow = quantile(ID_Dispersion_W_J200, 0.15), Qhigh = quantile(ID_Dispersion_W_J200, 0.85)) %>% 
+  mutate(HighVol = ifelse(ID_Dispersion_W_J200 > Qhigh, "High", ifelse(ID_Dispersion_W_J200 < Qlow, "Low", "Neutral")))
+
+# confusion matrix/contingency table
+
+ID_dispJ200 %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
+  left_join(RvolJ200, by = "date") %>% rename(RealV_vol = HighVol) %>% select(Intraday_vol, RealV_vol) %>% 
+  mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
+         RealV_vol = factor(RealV_vol, levels = c("High","Neutral", "Low"))) %>% table() %>% kable()
+
+#install.packages("caret")
+#library(caret)
+
+```
+
+## In weekly format
+
+```{r}
+# Truncate the weekly sample
+
+RvolJ200w <- Ivol %>% filter(Idx == "J200", Type == "W_Avg_RV") %>% tbl_xts() %>% 
+  xts_tbl() %>% mutate(Qlow = quantile(Value, 0.15), Qhigh = quantile(Value, 0.70)) %>% 
+    mutate(HighVol = ifelse(Value > Qhigh, "High", ifelse(Value < Qlow, "Low", "Neutral"))) 
+
+# remove the nas from the sample
+
+dispJ200w <- W_Dispersion %>% filter(Idx == "J200_W_Adj") %>% select(date, Dispersion_W) %>%
+  na.omit() %>% mutate(Qlow = quantile(Dispersion_W, 0.15), Qhigh = quantile(Dispersion_W, 0.85)) %>% 
+  mutate(HighVol = ifelse(Dispersion_W > Qhigh, "High", ifelse(Dispersion_W < Qlow, "Low", "Neutral")))
+
+# confusion matrix of the different periods of volatility
+
+dispJ200w %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
+  left_join(RvolJ200w, by = "date") %>% rename(RealV_vol = HighVol) %>% select(Intraday_vol, RealV_vol) %>% 
+  mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
+         RealV_vol = factor(RealV_vol, levels = c("High","Neutral", "Low"))) %>% table() %>% kable()
+
+```
+
+
+## The mean of the different dispersion vol regimes
+
+```{r}
+# daily
+
+ID_dispJ200 %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
+  left_join(RvolJ200, by = "date") %>% mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
+         HighVol = factor(HighVol, levels = c("High","Neutral", "Low"))) %>% with(tapply(Value, Intraday_vol, max)) 
+
+# weekly
+
+dispJ200w %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
+  left_join(RvolJ200w, by = "date") %>% na.omit() %>%
+  mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral","Low")), 
+         HighVol = factor(HighVol, levels = c("High","Neutral", "Low"))) %>% 
+  with(tapply(Value, Intraday_vol, mean)) %>% kable()
+
+```
+
+# Stratfication test
+
+```{r}
+
+J200dispw <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>% na.omit() %>% 
+  rename(Disp = ID_Dispersion_W_J200) %>% tbl_xts() %>% apply.weekly(mean) %>% 
+  xts_tbl() %>% mutate(Qlow = quantile(Disp, 0.20), Qhigh = quantile(Disp ,0.55)) %>% 
+  mutate(HighVol = ifelse(Disp > Qhigh, "High", ifelse(Disp < Qlow, "Low", "Neutral")))
+
+highdisp <- J200dispw %>% filter(HighVol == "High") %>% select(date, Disp) %>% 
+  left_join(xts_tbl(comb2), by = "date")
+
+J200dispw %>% na.omit() %>%
+  ggplot() + 
+  geom_line(aes(date, Disp)) + 
+  geom_line(aes(date, Qlow), color = "red") +
+  geom_line(aes(date, Qhigh), color = "blue") 
+
+
+```
+
+
+# dummy variables 
+
+```{r}
+
+TP40dummy <- TP40rts_w %>% xts_tbl() %>% 
+  mutate(Qlow = quantile(Returns, 0.15), Qhigh = quantile(Returns, 0.75)) %>% 
+  mutate(HighVol = ifelse(Returns > Qhigh, "High", ifelse(Returns < Qlow, "Low", "Neutral"))) %>%
+  mutate(dummy = ifelse(HighVol=="High", 1, 0))
+
+RvolJ200w1 <- RvolJ200w %>% select(date, Value) %>% tbl_xts()
+
+Hdummy <- J200dispw %>%  mutate(dummy = ifelse(J200dispw$HighVol=="High", 1, 0)) %>% 
+  select(date, dummy) %>% left_join(xts_tbl(TP40rts_w), by = "date") %>% na.omit() %>% 
+  select(dummy) %>% as.matrix()
+
+J200dispw %>%  mutate(dummy = ifelse(J200dispw$HighVol=="Low", 1, NA)) %>% 
+  select(date, dummy) %>% left_join(xts_tbl(TP40rts_w), by = "date") %>% na.omit() %>% 
+  select(Returns) %>% as.matrix() %>% abs() %>% mean()
+
+
+Ndummy <- J200dispw %>%  mutate(dummyn = ifelse(J200dispw$HighVol=="Neutral", 1, 0)) %>% 
+  select(date, dummyn) %>%  left_join(xts_tbl(TP40rts_w), by = "date") %>% select(dummyn)
+  
+Ldummy <- J200dispw %>%  mutate(dummyl = ifelse(J200dispw$HighVol=="Low", 1, 0)) %>% 
+  na.omit() %>% select(dummyl) %>% as.matrix()
+
+exregdum <- cbind(Hdummy, Ndummy, Ldummy) %>% as.matrix()
+
+
+garchx3 <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = Hdummy), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution.model = "norm")
+
+garchfitx3 <- ugarchfit(spec = garchx3, data = fitw)
+
+
+
+kable(garchfitx3@fit$matcoef, format = "html")
+
+kable(garchfitx3@fit$LLH, format = "html")
+
+```
+
+
+# two statified periods 
+
+```{r}
+
+Hdummy2 <- J200dispw %>%  mutate(dummy = ifelse(J200dispw$HighVol=="High", 1, 0)) %>% 
+  left_join(xts_tbl(TP40rts_w), by = "date") %>% filter(dummy == 1) %>% select(Disp, Returns)
+
+exreg1 <- Hdummy2[,1] %>% as.matrix()
+fit1 <- Hdummy2[,2] %>% as.matrix()
+
+
+
+garchx4 <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = exreg1), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution.model = "norm")
+
+garchfitx5 <- ugarchfit(spec = garchx4, data = fit1)
+
+
+Ldummy2 <- J200dispw %>%  mutate(dummy = ifelse(J200dispw$HighVol=="High", 1, 0)) %>% 
+  left_join(xts_tbl(TP40rts_w), by = "date") %>% filter(dummy == 0) %>% select(Disp, Returns)
+
+
+
+exreg2 <- Ldummy2[,1] %>% as.matrix()
+fit2 <- Ldummy2[,2] %>% as.matrix()
+
+
+garchx5 <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
+    1), external.regressors = exreg2), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
+    distribution.model = "norm")
+
+
+garchfitx6 <- ugarchfit(spec = garchx5, data = fit2)
+
+kable(garchfitx6@fit$matcoef, format = "html")
+
+# save the two stratified periods
+
+
+saveRDS(garchfitx5, file = "garchfitsh")
+saveRDS(garchfitx6, file = "garchfitsl")
+
+
+```
 
 
 
