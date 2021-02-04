@@ -1,5 +1,5 @@
 ---
-title: "README"
+title: "Financial Econometrics Project"
 output: github_document
 ---
 
@@ -23,6 +23,8 @@ library(knitr)
 
 
 # Dispersion data 
+
+Here the disperion and realized volatility data is added to the environment
 
 ```{r}
 
@@ -54,6 +56,8 @@ M_Dispersion <-
 
 ## Importing index returns data 
 
+For the returns data the J200 is used and the new data is added with the "n" term
+
 ```{r}
 library(tbl2xts)
 
@@ -72,6 +76,8 @@ TP40 <- read_rds("data/TP40.rds")
 ```
 
 ## Calculate returns with new data 15/01/21
+
+The returns are in the format of single stocks in the index with their weights so they are convert to form the daily data for the index. The first plot that is used in the paper is saved here, all objects are saved as RDS files so that they can be easily moved to the textievier environment.
 
 ```{r}
 TP40n <- read_rds("data/Top40_new.rds")
@@ -110,6 +116,8 @@ plotf <- plot %>%
 # save plot for tex 
 
 saveRDS(plotf, file = "plotf")
+
+# This next plot is just to observe the difference between the Top40 that I was given and the fmxdata top 40 index
   
 
 xts_tbl(TP40rts) %>% left_join(xts_tbl(TP40), by = "date") %>% na.omit() %>%
@@ -121,6 +129,8 @@ xts_tbl(TP40rts) %>% left_join(xts_tbl(TP40), by = "date") %>% na.omit() %>%
 ```
 
 # Plotting the returns data 
+
+Again this data is for visualization purposes, the facet wrap function is used with ggplot to view all the different series in the same plot.  
 
 ```{r}
 # plotting the data 
@@ -140,6 +150,8 @@ ggplot(Plotdata) + geom_line(aes(x = date, y = Returns, colour = ReturnType,
 
 
 ## tests
+
+To test the persistance in the data, the ACF is used in terms of squared and absolute formats. 
 
 ```{r}
 forecast::Acf(TP40rts, main = "ACF: Equally Weighted Return")
@@ -171,7 +183,7 @@ comb <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>%  left_join(xts_tbl(TP
 
 combplot <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>%  left_join(xts_tbl(TP40rts), by="date") %>%
   tbl_xts() %>% na.omit %>% apply.weekly(mean) %>% xts_tbl() %>% 
-  rename("Return Dispersion" = ID_Dispersion_W_J200) %>% gather(Type, Value, -date)
+  rename("Return Dispersion" = ID_Dispersion_W_J200) %>% gather(Type, Value, -date) %>% na.omit()
 
 # Second plot for tex proj
 
@@ -188,11 +200,9 @@ saveRDS(combplot, file = "combplot")
 
 # remove the NAs - temporary solution 
 
-comb[is.na(comb)] <- 0 
-
 colSums(is.na(comb))
 
-fit <- comb[,2] %>% as.matrix() 
+fit <- comb[,2] %>% as.matrix()
 
 
 # first fit the simple model to returns 
@@ -204,6 +214,8 @@ garch1 <- ugarchspec(variance.model = list(model = c("sGARCH",
 
 garchfit1 = ugarchfit(spec = garch1, data = fit)
 
+# cable is used here to make the html file look clean and proffessional 
+
 kable(garchfit1@fit$matcoef, format = "html")
 
 
@@ -211,10 +223,14 @@ kable(garchfit1@fit$matcoef, format = "html")
 
 ## Fitting with external regressor
 
+The external regressor must be in the form of a matrix or it won't work properly, why this is the case i am still usure. 
+
 ```{r}
 # identifying the fit and external regressor for the model then fitting it to GARCH-X
 
 exreg <- comb[,1] %>% as.matrix()
+
+ID_Disp$ID_Dispersion_W_J200 %>% na.omit() %>% min()
 
 garchx <- ugarchspec(variance.model = list(model = c("sGARCH", 
     "gjrGARCH", "eGARCH", "fGARCH", "apARCH")[1], garchOrder = c(1, 
@@ -234,6 +250,8 @@ saveRDS(garchfit1, file = "garchfit1")
 ```
 
 ## Veiw the two conditional variance plots
+
+This is largely just following the tut to see what the plots can shows us. 
 
 ```{r}
 
@@ -291,6 +309,8 @@ kable(fit.ic)
 
 ## Forecasting with daily data
 
+Testing the forecasting function of the rugarch package
+
 ```{r}
 # forecast
 
@@ -323,6 +343,8 @@ kable(vol)
 
 ## Testing the forecasting accuracy for the two models
 
+This section just tests what the total errors are in the forecasts to observe their practical ability. 
+
 ```{r}
 cl = makePSOCKcluster(10)
 
@@ -344,15 +366,9 @@ report(roll, type = "fpm")
 
 ```
 
-## Run an AR(1) on 
-
-```{r}
-arima(TP40, order = c(1, 0, 1))
-
-arima(exreg, order = c(1, 0, 0))
-```
-
 # Esitmating weekly data on the GARCH model
+
+The same test just on weekly data to see what the story is. 
 
 ```{r}
 
@@ -392,6 +408,7 @@ saveRDS(garchfitx2, file = "garchfitwx")
 ```
 
 ## Weekly data output
+
 ```{r}
 kable(garchfit2@fit$matcoef, format = "html")
 kable(garchfitx2@fit$matcoef, format = "html")
@@ -460,6 +477,7 @@ report(rollw, type = "fpm")
 
 # Estimating monthly data on the GARCH
 
+Finally we take a look at weekly data have a look at what is going on 
 
 ```{r}
 M_Dispersion <- 
@@ -475,6 +493,8 @@ plot.xts(Monthly$Returns)
 
 fitm <- Monthly[,2]
 exregm <- Monthly[,1]
+
+exregm %>% min()
 
 garchxm <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 
     1), external.regressors = exregm), mean.model = list(armaOrder = c(1, 0), include.mean = TRUE), 
@@ -543,15 +563,19 @@ report(rollm, type = "fpm")
 
 # Truncate the sample 
 
+The data is truncated by listing what periods of dispersion fall into a certain percentile. With this the data is matched against realized volatility for a comparison using contingency tables and summary statistics, and matched with returns data to fit more GARCH specifications . 
+
 ## In daily format
 
 ```{r}
+
+# Introducing stratification to the realized volatiltiy data
 
 RvolJ200 <- Ivol %>% filter(Idx == "J200", Type == "W_Avg_RV") %>% 
   mutate(Qlow = quantile(Value, 0.15), Qhigh = quantile(Value, 0.85)) %>% 
   mutate(HighVol = ifelse(Value > Qhigh, "High", ifelse(Value < Qlow, "Low", "Neutral")))
 
-# make nas zero, temp solution
+# Doing the same thing with daily data. 
 
 ID_dispJ200 <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>% na.omit() %>% 
   mutate(Qlow = quantile(ID_Dispersion_W_J200, 0.15), Qhigh = quantile(ID_Dispersion_W_J200, 0.85)) %>% 
@@ -562,10 +586,7 @@ ID_dispJ200 <- ID_Disp %>% select(date, ID_Dispersion_W_J200) %>% na.omit() %>%
 ID_dispJ200 %>% select(date, HighVol) %>% rename(Intraday_vol = HighVol) %>% 
   left_join(RvolJ200, by = "date") %>% rename(RealV_vol = HighVol) %>% select(Intraday_vol, RealV_vol) %>% 
   mutate(Intraday_vol = factor(Intraday_vol, levels = c("High","Neutral", "Low")), 
-         RealV_vol = factor(RealV_vol, levels = c("High","Neutral", "Low"))) %>% table() %>% kable()
-
-#install.packages("caret")
-#library(caret)
+         RealV_vol = factor(RealV_vol, levels = c("High","Neutral", "Low"))) %>% table()
 
 ```
 
@@ -583,6 +604,8 @@ RvolJ200w <- Ivol %>% filter(Idx == "J200", Type == "W_Avg_RV") %>% tbl_xts() %>
 dispJ200w <- W_Dispersion %>% filter(Idx == "J200_W_Adj") %>% select(date, Dispersion_W) %>%
   na.omit() %>% mutate(Qlow = quantile(Dispersion_W, 0.15), Qhigh = quantile(Dispersion_W, 0.85)) %>% 
   mutate(HighVol = ifelse(Dispersion_W > Qhigh, "High", ifelse(Dispersion_W < Qlow, "Low", "Neutral")))
+
+dispJ200w$Dispersion_W %>% min()
 
 # confusion matrix of the different periods of volatility
 
@@ -637,6 +660,8 @@ J200dispw %>% na.omit() %>%
 
 # dummy variables 
 
+Not added to paper - dummy variables to test the different periods of dispersion
+
 ```{r}
 
 TP40dummy <- TP40rts_w %>% xts_tbl() %>% 
@@ -679,15 +704,17 @@ kable(garchfitx3@fit$LLH, format = "html")
 ```
 
 
-# two statified periods 
+# two statified periods
+
+Finally the data is separated into different periods and then GARCH is run on both samples. 
 
 ```{r}
 
-Hdummy2 <- J200dispw %>%  mutate(dummy = ifelse(J200dispw$HighVol=="High", 1, 0)) %>% 
+strat <- J200dispw %>%  mutate(dummy = ifelse(J200dispw$HighVol=="High", 1, 0)) %>% 
   left_join(xts_tbl(TP40rts_w), by = "date") %>% filter(dummy == 1) %>% select(Disp, Returns)
 
-exreg1 <- Hdummy2[,1] %>% as.matrix()
-fit1 <- Hdummy2[,2] %>% as.matrix()
+exreg1 <- strat[,1] %>% as.matrix()
+fit1 <- strat[,2] %>% as.matrix()
 
 
 
