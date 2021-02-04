@@ -36,5 +36,6 @@ vignettes/*.pdf
 *.knit.md
 
 # never save data (in this case save the data)
+/data
 
 
